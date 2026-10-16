@@ -11,7 +11,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win nsis portable",
+    "dist": "electron-builder --win",
     "pack": "electron-builder --win dir"
   },
   "dependencies": {
@@ -27,5 +27,51 @@
   "allowScripts": {
     "electron@44.8.0": true,
     "onnxruntime-node@1.30.0": true
+  },
+  "build": {
+    "appId": "com.vassu.promptdock",
+    "productName": "PromptDock",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json",
+      "!**/node_modules/onnxruntime-web/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v6/{linux,darwin}/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**",
+      "!**/node_modules/onnxruntime-node/bin/napi-v6/win32/x64/{DirectML.dll,dxcompiler.dll,dxil.dll}",
+      "!**/node_modules/@huggingface/transformers/dist/*.web*",
+      "!**/node_modules/@huggingface/transformers/dist/*.min.*",
+      "!**/node_modules/@huggingface/transformers/dist/ort-*",
+      "!**/node_modules/@huggingface/transformers/src/**",
+      "!**/*.map",
+      "!**/*.d.ts"
+    ],
+    "asarUnpack": [
+      "**/node_modules/onnxruntime-node/**",
+      "**/node_modules/sharp/**",
+      "**/node_modules/@img/**"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "PromptDock",
+      "artifactName": "PromptDock-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "PromptDock-Portable-${version}.exe"
+    },
+    "compression": "maximum"
   }
 }
