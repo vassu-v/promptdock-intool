@@ -192,22 +192,27 @@
     check('finds right one', titles()[0] === 'Bulk prompt 42', titles().slice(0, 3));
   });
 
+  const home = async () => { document.querySelector('.view:not([hidden]) [data-back]')?.click(); await wait(250); };
+
   await step('copy-only feedback', async () => {
-    await search('commit'); $('#q').focus(); await key('Enter', { ctrlKey: true }); await wait(200);
-    check('copy shows paste hint', !$('#toast').hidden && /Press Ctrl+V to paste/.test($('#toast').textContent), $('#toast').textContent);
+    await home();
+    await search('#css'); $('#q').focus(); await key('Enter', { ctrlKey: true }); await wait(250); // no slots
+    check('copy shows paste hint', !$('#toast').hidden && $('#toast').textContent.includes('Press Ctrl+V to paste'), $('#toast').textContent);
   });
 
   await step('auto-paste off relabels hints', async () => {
-    await pd.setSettings({ autoPaste: false });
+    await home();
     $('#q').focus(); await key(',', { ctrlKey: true }); await wait(300);
-    $('#s-autopaste').click(); $('#s-autopaste').click(); await wait(300); // toggle on→off via UI to re-apply labels
-    check('Enter hint says copy', $('.lbl-use').textContent === (((await pd.settings()).autoPaste) ? 'paste' : 'copy'), $('.lbl-use').textContent);
-    await pd.setSettings({ autoPaste: true });
-    $('[data-back]')[0].click(); await wait();
+    $('#s-autopaste').click(); await wait(300);
+    check('auto-paste off: Enter hint says copy', (await pd.settings()).autoPaste === false && $('.lbl-use').textContent === 'copy', $('.lbl-use').textContent);
+    check('auto-paste off: copy-only hint hidden', $('.only-paste').hidden);
+    $('#s-autopaste').click(); await wait(300);
+    check('auto-paste on: Enter hint says paste', $('.lbl-use').textContent === 'paste', $('.lbl-use').textContent);
+    await home();
   });
 
   await step('esc behaviour', async () => {
-    $$('[data-back]')[0].click(); await wait();
+    await home();
     await search('abc'); $('#q').focus(); await key('Escape');
     check('Esc clears query first', $('#q').value === '');
   });

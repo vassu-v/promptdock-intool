@@ -265,7 +265,9 @@ function registerIpc() {
   handle('tags:list', () => store.allTags());
   handle('slots:get', () => store.slotValues());
   handle('slots:set', (values) => store.setSlotValues(values));
-  handle('settings:get', () => ({ ...settings, hotkeyOk, activeHotkey, dataDir, portable: !!portableDir, platform: process.platform, canAutoPaste: CAN_AUTO_PASTE }));
+  handle('settings:get', () => ({ ...settings, hotkeyOk, activeHotkey, dataDir, portable: !!portableDir, // PD_FAKE_PLATFORM (test hook) previews another OS's labels in the UI only.
+    platform: process.env.PD_FAKE_PLATFORM || process.platform,
+    canAutoPaste: process.env.PD_FAKE_PLATFORM ? process.env.PD_FAKE_PLATFORM === 'win32' : CAN_AUTO_PASTE }));
   handle('settings:set', (patch) => updateSettings(patch));
   handle('semantic:state', () => semState);
   handle('semantic:enable', async () => { settings = store.setSettings({ semanticEnabled: true }); enableSemantic(); return true; });

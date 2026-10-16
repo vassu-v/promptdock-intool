@@ -106,7 +106,7 @@ async function finishUse(prompts, values, mode) {
   // Copied but not pasted (copy-only, auto-paste off, or macOS/Linux): say so, then get out of the way.
   show('search');
   runSearch();
-  toast(`Copied ✓ Press ${modKey()}+V to paste`, 1600);
+  toast(`Copied ✓ Press ${combo('V')} to paste`, 1600);
   clearTimeout(finishUse.t);
   finishUse.t = setTimeout(() => pd.hide(), 1300);
 }
@@ -172,6 +172,8 @@ async function openSettings() {
 // ---------------- platform labels ----------------
 const isMac = () => state.settings?.platform === 'darwin';
 const modKey = () => (isMac() ? '⌘' : 'Ctrl');
+/** Shortcut with the platform's main modifier: ⌘V on macOS, Ctrl+V elsewhere. */
+const combo = (k) => (isMac() ? `⌘${k}` : `Ctrl+${k}`);
 const autoPasteOn = () => state.settings?.canAutoPaste && state.settings?.autoPaste;
 const osName = () => ({ darwin: 'macOS', win32: 'Windows' }[state.settings?.platform] ?? 'your desktop');
 
@@ -184,7 +186,7 @@ function pretty(accel) {
 /** Rewrites shortcut hints and paste wording for this OS and the auto-paste setting. */
 function applyPlatform() {
   if (isMac()) {
-    document.querySelectorAll('kbd').forEach((k) => { k.textContent = k.textContent.replace(/^Ctrl+/, '⌘'); });
+    document.querySelectorAll('kbd').forEach((k) => { k.textContent = k.textContent.replace('Ctrl+', '⌘'); });
     document.querySelectorAll('[title]').forEach((el) => { el.title = el.title.replace('Ctrl+', '⌘'); });
   }
   const paste = autoPasteOn();
@@ -195,7 +197,7 @@ function applyPlatform() {
   $('#s-autopaste-row').hidden = !state.settings.canAutoPaste;
   const note = $('#s-autopaste-note');
   note.hidden = state.settings.canAutoPaste;
-  note.textContent = `Auto-paste is Windows-only for now. On ${osName()}, choosing a prompt copies it; then press ${modKey()}+V.`;
+  note.textContent = `Auto-paste is Windows-only for now. On ${osName()}, choosing a prompt copies it; then press ${combo('V')}.`;
 }
 
 async function setSetting(patch) {
@@ -265,7 +267,7 @@ const TOUR = [
     ${autoPasteOn()
       ? `<li>The prompt is <b>pasted straight into the app you were using</b>, e.g. your AI chat box.</li>
          <li><kbd>Ctrl+Enter</kbd> copies it instead of pasting.</li>`
-      : `<li>The prompt is <b>copied</b>. Click back into your chat box and press <kbd>${modKey()}+V</kbd>.</li>`}</ul>` },
+      : `<li>The prompt is <b>copied</b>. Click back into your chat box and press <kbd>${combo('V')}</kbd>.</li>`}</ul>` },
   { title: 'Fill in the blanks', body: () => `<p>Prompts can have slots like <code>{{file}}</code> or <code>{{tone:friendly}}</code> (the part after <b>:</b> is a default).</p>
     <p>When you use one, PromptDock asks for each value. <kbd>Enter</kbd> moves to the next. The last <kbd>Enter</kbd> fills them in and ${autoPasteOn() ? 'pastes' : 'copies'}.
     Your answers are remembered on this PC for next time.</p>` },
@@ -283,7 +285,7 @@ function showTour(i = 0) {
   const hk = pretty(state.settings.activeHotkey ?? state.settings.hotkey);
   $('#tour-step').textContent = `${tourAt + 1} / ${TOUR.length}`;
   $('#tour-title').textContent = TOUR[tourAt].title;
-  $('#tour-body').innerHTML = TOUR[tourAt].body(esc(hk)).replaceAll('<kbd>Ctrl+', `<kbd>${modKey()}${isMac() ? '' : '+'}`);
+  $('#tour-body').innerHTML = TOUR[tourAt].body(esc(hk)).replaceAll('<kbd>Ctrl+', `<kbd>${combo('')}`);
   $('#tour-back').hidden = tourAt === 0;
   $('#tour-next').textContent = tourAt === TOUR.length - 1 ? 'Start using it' : 'Next';
   $('#tour').hidden = false;
