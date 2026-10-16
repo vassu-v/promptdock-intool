@@ -12,7 +12,8 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "dist": "electron-builder --win",
-    "pack": "electron-builder --win dir"
+    "pack": "electron-builder --win dir",
+    "test:e2e": "node test/e2e/run.js"
   },
   "dependencies": {
     "sql.js": "1.15.0"

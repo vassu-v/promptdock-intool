@@ -1,7 +1,8 @@
 // Slot syntax: {{name}} or {{name:default value}}.
 // Pure functions, shared by the desktop app and a future web build.
 
-const SLOT_RE = /\{\{\s*([A-Za-z0-9_\- ]+?)\s*(?::([^}]*))?\}\}/g;
+// Names may use any language's letters (e.g. {{फ़ाइल}}), digits, _, - and spaces.
+const SLOT_RE = /\{\{\s*([\p{L}\p{M}\p{N}_\- ]+?)\s*(?::([^}]*))?\}\}/gu;
 
 /** Unique slots in order of first appearance: [{ name, default }]. */
 export function parseSlots(text) {

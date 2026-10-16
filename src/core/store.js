@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   semanticEnabled: false,
   launchAtLogin: false,
   opacity: 0.86,
+  tourDone: false,
 };
 
 const now = () => new Date().toISOString();

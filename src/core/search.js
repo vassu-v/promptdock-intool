@@ -25,8 +25,13 @@ function fieldScore(word, text) {
   if (!text) return 0;
   const idx = text.indexOf(word);
   if (idx >= 0) {
+    // Whole word > start of a word > anywhere inside a word.
+    const end = idx + word.length;
+    const atWordEnd = end === text.length || /\W/.test(text[end]);
+    if ((idx === 0 || /\W/.test(text[idx - 1])) && atWordEnd) return 1;
+    if (text.split(/\W+/).includes(word)) return 1;
     const atWordStart = idx === 0 || /\W/.test(text[idx - 1]);
-    return atWordStart ? 1 : 0.7;
+    return atWordStart ? 0.85 : 0.7;
   }
   if (word.length < 3) return 0;
   // Fuzzy: best subsequence match against any single word in the field.

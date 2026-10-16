@@ -19,7 +19,9 @@ if (!app.requestSingleInstanceLock()) app.exit(0);
 
 // Portable build keeps its data beside the .exe; the installed build uses %APPDATA%.
 const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
-const dataDir = portableDir ? path.join(portableDir, 'PromptDock-data') : app.getPath('userData');
+// PD_DATA_DIR overrides both (used by the e2e tests to run against a throwaway library).
+const dataDir = process.env.PD_DATA_DIR || (portableDir ? path.join(portableDir, 'PromptDock-data') : app.getPath('userData'));
+const E2E = !!process.env.PD_E2E;
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, 'promptdock.sqlite');
 const modelDir = path.join(dataDir, 'models');
@@ -27,6 +29,8 @@ const modelDir = path.join(dataDir, 'models');
 let store, panel, bubble, tray;
 let settings;
 let modalOpen = false;
+let firstRun = false;
+let lastText = null;
 let saveTimer = null;
 let pendingBytes = null;
 let hotkeyOk = false;
@@ -43,9 +47,16 @@ function persist(bytes) {
 function flush() {
   if (!pendingBytes) return;
   const tmp = `${dbPath}.tmp`;
-  fs.writeFileSync(tmp, pendingBytes);
-  fs.renameSync(tmp, dbPath);
-  pendingBytes = null;
+  try {
+    fs.writeFileSync(tmp, pendingBytes);
+    fs.renameSync(tmp, dbPath);
+    pendingBytes = null;
+  } catch (err) {
+    // Antivirus or a sync tool can briefly lock the file; retry instead of crashing.
+    console.error('save failed, retrying', err.message);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 1000);
+  }
 }
 
 async function openStore() {
@@ -54,6 +65,7 @@ async function openStore() {
   store = new PromptStore(SQL, exists ? fs.readFileSync(dbPath) : null, persist);
   if (!exists) for (const p of SEED_PROMPTS) store.create(p);
   settings = store.settings();
+  firstRun = !exists;
 }
 
 // ---------- windows ----------
@@ -68,7 +80,7 @@ function createPanel() {
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
   panel.loadFile(path.join(root, 'src', 'renderer', 'index.html'));
-  panel.on('blur', () => { if (!modalOpen && !process.env.PD_KEEP_OPEN) hidePanel(); });
+  panel.on('blur', () => { if (!modalOpen && !process.env.PD_KEEP_OPEN && !E2E) hidePanel(); });
 }
 
 function positionPanel() {
@@ -99,7 +111,10 @@ function togglePanel() {
 
 function createBubble() {
   const { workArea } = screen.getPrimaryDisplay();
-  const pos = settings.bubblePos ?? { x: workArea.x + workArea.width - 76, y: workArea.y + Math.round(workArea.height * 0.45) };
+  let pos = settings.bubblePos ?? { x: workArea.x + workArea.width - 76, y: workArea.y + Math.round(workArea.height * 0.45) };
+  // A saved position on a monitor that is no longer attached would leave the bubble unreachable.
+  const onScreen = screen.getAllDisplays().some(({ workArea: w }) => pos.x >= w.x && pos.y >= w.y && pos.x + 56 <= w.x + w.width && pos.y + 56 <= w.y + w.height);
+  if (!onScreen) pos = { x: workArea.x + workArea.width - 76, y: workArea.y + Math.round(workArea.height * 0.45) };
   bubble = new BrowserWindow({
     width: 56, height: 56, x: pos.x, y: pos.y, frame: false, transparent: true, resizable: false,
     skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false,
@@ -226,6 +241,7 @@ function registerIpc() {
     const prompts = ids.map((id) => store.get(id)).filter(Boolean);
     const text = render(prompts, values, settings.separator);
     clipboard.writeText(text);
+    lastText = text;
     store.markUsed(ids);
     if (Object.keys(values).length) store.setSlotValues(Object.fromEntries(Object.entries(values).filter(([, v]) => v)));
     if (mode === 'copy') return text;
@@ -246,7 +262,8 @@ function registerIpc() {
   });
   handle('bubble:pinned', () => store.list().filter((p) => p.pinned).slice(0, 6).map(({ id, title }) => ({ id, title })));
 
-  handle('data:export', async () => {
+  handle('data:export', async (testPath) => {
+    if (E2E && testPath) { fs.writeFileSync(testPath, JSON.stringify(store.exportJSON(), null, 2)); return testPath; }
     modalOpen = true;
     try {
       const { canceled, filePath } = await dialog.showSaveDialog(panel, { defaultPath: 'promptdock-export.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
@@ -255,17 +272,37 @@ function registerIpc() {
       return filePath;
     } finally { modalOpen = false; panel.focus(); }
   });
-  handle('data:import', async () => {
+  handle('data:import', async (testPath) => {
+    if (E2E && testPath) { const n = store.importJSON(JSON.parse(fs.readFileSync(testPath, 'utf8'))); afterChange(); return n; }
     modalOpen = true;
     try {
       const { canceled, filePaths } = await dialog.showOpenDialog(panel, { properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
       if (canceled) return null;
-      const n = store.importJSON(JSON.parse(fs.readFileSync(filePaths[0], 'utf8')));
+      let data;
+      try { data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8')); } catch { throw new Error('That file is not valid JSON.'); }
+      if (!Array.isArray(data?.prompts)) throw new Error('That file is not a PromptDock export.');
+      const n = store.importJSON(data);
       afterChange();
       return n;
     } finally { modalOpen = false; panel.focus(); }
   });
   handle('modal', (open) => { modalOpen = !!open; });
+  handle('app:firstRun', () => firstRun);
+  if (E2E) handle('test:last', () => lastText);
+}
+
+// ---------- e2e ----------
+// PD_E2E=<scenario file>: runs it inside the panel; it must evaluate to a Promise of results.
+async function runE2E() {
+  panel.webContents.on('console-message', (e) => { if (e.level === 'error') console.log('[renderer]', e.message); });
+  await new Promise((r) => panel.once('ready-to-show', r));
+  showPanel();
+  await new Promise((r) => setTimeout(r, 500));
+  let out;
+  try { out = await panel.webContents.executeJavaScript(fs.readFileSync(process.env.PD_E2E, 'utf8')); }
+  catch (e) { out = [{ name: 'scenario crashed', ok: false, info: String(e) }]; }
+  console.log('E2E_RESULTS ' + JSON.stringify(out));
+  app.exit(out.every((r) => r.ok) ? 0 : 1);
 }
 
 // ---------- lifecycle ----------
@@ -283,7 +320,9 @@ app.whenReady().then(async () => {
   registerWithFallback(settings.hotkey);
   paste.warmUp();
   if (settings.semanticEnabled) enableSemantic();
-  if (process.env.PD_SHOW) panel.once('ready-to-show', showPanel);
+  // First launch: open the panel so the user sees the app (the renderer then starts the tour).
+  if ((process.env.PD_SHOW || firstRun) && !E2E && !process.env.PD_SNAP) panel.once('ready-to-show', showPanel);
+  if (E2E) runE2E();
   // Dev/test hook: PD_SNAP=out.png [PD_SNAP_JS=code] captures the panel, then quits.
   if (process.env.PD_SNAP) {
     panel.webContents.on('console-message', (e) => console.log('[renderer]', e.level, e.message));

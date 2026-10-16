@@ -20,8 +20,10 @@ contextBridge.exposeInMainWorld('pd', {
   use: (o) => call('use', o),
   hide: () => call('panel:hide'),
   modal: (open) => call('modal', open),
-  exportData: () => call('data:export'),
-  importData: () => call('data:import'),
+  exportData: (testPath) => call('data:export', testPath),
+  importData: (testPath) => call('data:import', testPath),
+  firstRun: () => call('app:firstRun'),
+  testLast: () => call('test:last'),
   semantic: {
     state: () => call('semantic:state'),
     enable: () => call('semantic:enable'),

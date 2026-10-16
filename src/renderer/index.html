@@ -74,11 +74,22 @@
       <p class="muted">Remembered on this computer only. Edit or clear them here.</p>
       <div id="s-slots" class="slotlist"></div>
 
+      <h3>Help</h3>
+      <div class="row"><button id="s-tour">Show the tour again</button></div>
+
       <h3>Data</h3>
       <div class="row"><button id="s-import">Import JSON</button><button id="s-export">Export JSON</button></div>
       <p class="muted" id="s-datadir"></p>
     </div>
   </section>
+  <div id="tour" class="tour" hidden>
+    <div class="card">
+      <div class="tour-top"><span id="tour-step" class="badge"></span><button class="icon" id="tour-skip" title="Skip tour">✕</button></div>
+      <h2 id="tour-title"></h2>
+      <div id="tour-body"></div>
+      <div class="row tour-nav"><button id="tour-back">Back</button><span class="grow"></span><button id="tour-next" class="primary">Next</button></div>
+    </div>
+  </div>
   <div id="toast" class="toast" hidden></div>
 </div>
 <script type="module" src="app.js"></script>

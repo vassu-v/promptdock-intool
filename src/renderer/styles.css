@@ -70,3 +70,15 @@ h3{font-size:13.5px;margin:12px 0 0;display:flex;gap:8px;align-items:center}
 ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:4px}
 .tray[hidden],[hidden]{display:none!important}
 input[type=checkbox],input[type=range]{accent-color:var(--accent)}
+
+.tour{position:absolute;inset:0;background:rgba(10,12,20,.55);display:grid;place-items:center;border-radius:14px;z-index:5}
+.tour .card{width:86%;background:var(--bg);background:color-mix(in srgb,var(--bg) 100%,transparent);backdrop-filter:blur(2px);
+  border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.tour .card{background:rgb(30,32,43)}
+@media (prefers-color-scheme: light){.tour .card{background:#fff}}
+.tour h2{font-size:17px;margin:8px 0 6px}
+.tour p{margin:6px 0;color:var(--fg)}
+.tour ul{margin:6px 0;padding-left:18px}.tour li{margin:3px 0}
+.tour-top{display:flex;justify-content:space-between;align-items:center}
+.tour-nav{margin-top:12px}
+.tour code{font:12px Consolas,monospace;background:var(--accent2);color:var(--accent);padding:1px 5px;border-radius:4px}

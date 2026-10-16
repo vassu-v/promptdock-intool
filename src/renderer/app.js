@@ -222,6 +222,46 @@ function backToSearch() {
   runSearch();
 }
 
+// ---------------- first-run tour ----------------
+const TOUR = [
+  { title: 'Welcome to PromptDock 👋', body: (hk) => `<p>Your prompt library, one shortcut away.</p>
+    <p>Press <kbd>${hk}</kbd> anywhere in Windows to open or close this panel. You can also click the small
+    <b>&gt;_</b> bubble on the edge of your screen, or the tray icon.</p>` },
+  { title: 'Find a prompt and use it', body: () => `<ul>
+    <li>Start typing to search. Small typos are fine. Use <code>#tag</code> to filter.</li>
+    <li><kbd>↑</kbd> <kbd>↓</kbd> to choose, then <kbd>Enter</kbd>.</li>
+    <li>The prompt is <b>pasted straight into the app you were using</b>, e.g. your AI chat box.</li>
+    <li><kbd>Ctrl+Enter</kbd> copies it instead of pasting.</li></ul>` },
+  { title: 'Fill in the blanks', body: () => `<p>Prompts can have slots like <code>{{file}}</code> or <code>{{tone:friendly}}</code> (the part after <b>:</b> is a default).</p>
+    <p>When you use one, PromptDock asks for each value. <kbd>Enter</kbd> moves to the next. The last <kbd>Enter</kbd> fills them in and pastes.
+    Your answers are remembered on this PC for next time.</p>` },
+  { title: 'Combine and edit', body: () => `<ul>
+    <li><kbd>Tab</kbd> adds the highlighted prompt to a compose tray. Add a few, then <kbd>Enter</kbd> pastes them all in order.</li>
+    <li><kbd>Ctrl+N</kbd> new prompt, <kbd>Ctrl+E</kbd> or right-click to edit, <kbd>Esc</kbd> to close.</li></ul>` },
+  { title: 'Make it yours', body: () => `<p>Open <b>⚙ Settings</b> (<kbd>Ctrl+,</kbd>) to change the shortcut, opacity and auto-paste,
+    hide the bubble, start with Windows, back up your prompts, or turn on <b>semantic search</b> (finds prompts by meaning).</p>
+    <p>You can replay this tour from Settings at any time.</p>` },
+];
+let tourAt = 0;
+
+function showTour(i = 0) {
+  tourAt = Math.max(0, Math.min(i, TOUR.length - 1));
+  const hk = pretty(state.settings.activeHotkey ?? state.settings.hotkey);
+  $('#tour-step').textContent = `${tourAt + 1} / ${TOUR.length}`;
+  $('#tour-title').textContent = TOUR[tourAt].title;
+  $('#tour-body').innerHTML = TOUR[tourAt].body(esc(hk));
+  $('#tour-back').hidden = tourAt === 0;
+  $('#tour-next').textContent = tourAt === TOUR.length - 1 ? 'Start using it' : 'Next';
+  $('#tour').hidden = false;
+  $('#tour-next').focus();
+}
+
+async function endTour() {
+  $('#tour').hidden = true;
+  await setSetting({ tourDone: true });
+  backToSearch();
+}
+
 // Two-click confirmation (a native dialog would blur and hide the panel).
 function armed(btn, label) {
   if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; return true; }
@@ -239,6 +279,12 @@ function bind() {
 
   document.addEventListener('keydown', (e) => {
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    if (!$('#tour').hidden) {
+      if (k === 'Escape') { e.preventDefault(); endTour(); }
+      else if (k === 'ArrowRight') { e.preventDefault(); $('#tour-next').click(); }
+      else if (k === 'ArrowLeft' && tourAt > 0) { e.preventDefault(); showTour(tourAt - 1); }
+      return;
+    }
     if (state.view === 'search') {
       const cur = state.results[state.sel];
       if (k === 'ArrowDown') { e.preventDefault(); state.sel = Math.min(state.sel + 1, state.results.length - 1); drawResults(); }
@@ -290,7 +336,7 @@ function bind() {
   $('#e-body').addEventListener('input', drawEditorSlots);
   $('#e-slot').addEventListener('click', makeSlot);
   $('#e-save').addEventListener('click', saveEditor);
-  $('#e-delete').addEventListener('click', async () => {
+  $('#e-delete').addEventListener('click', async (e) => {
     if (!armed(e.currentTarget, 'Click again to delete')) return;
     await pd.remove(state.editing.id);
     toast('Deleted');
@@ -314,6 +360,10 @@ function bind() {
     toast('Model removed');
   });
   pd.semantic.onState(drawSemantic);
+  $('#tour-next').addEventListener('click', () => (tourAt === TOUR.length - 1 ? endTour() : showTour(tourAt + 1)));
+  $('#tour-back').addEventListener('click', () => showTour(tourAt - 1));
+  $('#tour-skip').addEventListener('click', endTour);
+  $('#s-tour').addEventListener('click', () => showTour(0));
   $('#s-slots').addEventListener('change', (e) => {
     if (e.target.dataset.sv) pd.setSlotValues({ [e.target.dataset.sv]: e.target.value }).then(() => toast('Saved'));
   });
@@ -338,4 +388,5 @@ function bind() {
   drawSemantic(await pd.semantic.state());
   bind();
   runSearch();
+  if (!state.settings.tourDone) showTour(0);
 })();
