@@ -14,7 +14,8 @@
     "dist": "electron-builder --win",
     "pack": "electron-builder --win dir",
     "test:e2e": "node test/e2e/run.js",
-    "icon": "electron scripts/make-icon.cjs"
+    "icon": "electron scripts/make-icon.cjs",
+    "postinstall": "node scripts/ensure-electron.cjs"
   },
   "dependencies": {
     "sql.js": "1.15.0"
