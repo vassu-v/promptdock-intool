@@ -16,12 +16,12 @@ const state = {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function toast(msg) {
+function toast(msg, ms = 1800) {
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => (t.hidden = true), 1800);
+  toast.t = setTimeout(() => (t.hidden = true), ms);
 }
 
 function show(view) {
@@ -99,12 +99,16 @@ function updatePreview() {
 }
 
 async function finishUse(prompts, values, mode) {
-  await pd.use({ ids: prompts.map((p) => p.id), values, mode });
-  if (mode === 'copy') toast('Copied to clipboard');
-  else if (!state.settings.autoPaste) toast('Copied — paste with Ctrl+V');
+  const res = await pd.use({ ids: prompts.map((p) => p.id), values, mode });
   state.tray = [];
   drawTray();
-  if (mode === 'copy') { show('search'); runSearch(); }
+  if (res.pasted) return;
+  // Copied but not pasted (copy-only, auto-paste off, or macOS/Linux): say so, then get out of the way.
+  show('search');
+  runSearch();
+  toast(`Copied ✓ Press ${modKey()}+V to paste`, 1600);
+  clearTimeout(finishUse.t);
+  finishUse.t = setTimeout(() => pd.hide(), 1300);
 }
 
 // ---------------- editor ----------------
@@ -165,12 +169,40 @@ async function openSettings() {
   show('settings');
 }
 
-const pretty = (a) => a.replace('Super', 'Win').replace('Control', 'Ctrl').replaceAll('+', ' + ');
+// ---------------- platform labels ----------------
+const isMac = () => state.settings?.platform === 'darwin';
+const modKey = () => (isMac() ? '⌘' : 'Ctrl');
+const autoPasteOn = () => state.settings?.canAutoPaste && state.settings?.autoPaste;
+const osName = () => ({ darwin: 'macOS', win32: 'Windows' }[state.settings?.platform] ?? 'your desktop');
+
+function pretty(accel) {
+  const map = isMac() ? { Super: '⌘ Cmd', Control: '⌃ Ctrl', Alt: '⌥ Option', Shift: '⇧ Shift' }
+    : { Super: state.settings?.platform === 'win32' ? 'Win' : 'Super', Control: 'Ctrl' };
+  return accel.split('+').map((k) => map[k] ?? k).join(' + ');
+}
+
+/** Rewrites shortcut hints and paste wording for this OS and the auto-paste setting. */
+function applyPlatform() {
+  if (isMac()) {
+    document.querySelectorAll('kbd').forEach((k) => { k.textContent = k.textContent.replace(/^Ctrl+/, '⌘'); });
+    document.querySelectorAll('[title]').forEach((el) => { el.title = el.title.replace('Ctrl+', '⌘'); });
+  }
+  const paste = autoPasteOn();
+  document.querySelectorAll('.lbl-use').forEach((el) => { el.textContent = paste ? 'paste' : 'copy'; });
+  document.querySelectorAll('.lbl-final').forEach((el) => { el.textContent = paste ? 'paste' : 'copy'; });
+  document.querySelectorAll('.only-paste').forEach((el) => { el.hidden = !paste; });
+  $('#s-login-label').textContent = state.settings.platform === 'win32' ? 'Start with Windows' : 'Start at login';
+  $('#s-autopaste-row').hidden = !state.settings.canAutoPaste;
+  const note = $('#s-autopaste-note');
+  note.hidden = state.settings.canAutoPaste;
+  note.textContent = `Auto-paste is Windows-only for now. On ${osName()}, choosing a prompt copies it; then press ${modKey()}+V.`;
+}
 
 async function setSetting(patch) {
   try {
     state.settings = { ...state.settings, ...(await pd.setSettings(patch)) };
     applyLook();
+    applyPlatform();
   } catch (e) {
     toast(e.message.replace(/^Error: /, ''));
     openSettings();
@@ -225,18 +257,20 @@ function backToSearch() {
 // ---------------- first-run tour ----------------
 const TOUR = [
   { title: 'Welcome to PromptDock 👋', body: (hk) => `<p>Your prompt library, one shortcut away.</p>
-    <p>Press <kbd>${hk}</kbd> anywhere in Windows to open or close this panel. You can also click the small
+    <p>Press <kbd>${hk}</kbd> anywhere on ${osName()} to open or close this panel. You can also click the small
     <b>&gt;_</b> bubble on the edge of your screen, or the tray icon.</p>` },
   { title: 'Find a prompt and use it', body: () => `<ul>
     <li>Start typing to search. Small typos are fine. Use <code>#tag</code> to filter.</li>
     <li><kbd>↑</kbd> <kbd>↓</kbd> to choose, then <kbd>Enter</kbd>.</li>
-    <li>The prompt is <b>pasted straight into the app you were using</b>, e.g. your AI chat box.</li>
-    <li><kbd>Ctrl+Enter</kbd> copies it instead of pasting.</li></ul>` },
+    ${autoPasteOn()
+      ? `<li>The prompt is <b>pasted straight into the app you were using</b>, e.g. your AI chat box.</li>
+         <li><kbd>Ctrl+Enter</kbd> copies it instead of pasting.</li>`
+      : `<li>The prompt is <b>copied</b>. Click back into your chat box and press <kbd>${modKey()}+V</kbd>.</li>`}</ul>` },
   { title: 'Fill in the blanks', body: () => `<p>Prompts can have slots like <code>{{file}}</code> or <code>{{tone:friendly}}</code> (the part after <b>:</b> is a default).</p>
-    <p>When you use one, PromptDock asks for each value. <kbd>Enter</kbd> moves to the next. The last <kbd>Enter</kbd> fills them in and pastes.
+    <p>When you use one, PromptDock asks for each value. <kbd>Enter</kbd> moves to the next. The last <kbd>Enter</kbd> fills them in and ${autoPasteOn() ? 'pastes' : 'copies'}.
     Your answers are remembered on this PC for next time.</p>` },
   { title: 'Combine and edit', body: () => `<ul>
-    <li><kbd>Tab</kbd> adds the highlighted prompt to a compose tray. Add a few, then <kbd>Enter</kbd> pastes them all in order.</li>
+    <li><kbd>Tab</kbd> adds the highlighted prompt to a compose tray. Add a few, then <kbd>Enter</kbd> ${autoPasteOn() ? 'pastes' : 'copies'} them all in order.</li>
     <li><kbd>Ctrl+N</kbd> new prompt, <kbd>Ctrl+E</kbd> or right-click to edit, <kbd>Esc</kbd> to close.</li></ul>` },
   { title: 'Make it yours', body: () => `<p>Open <b>⚙ Settings</b> (<kbd>Ctrl+,</kbd>) to change the shortcut, opacity and auto-paste,
     hide the bubble, start with Windows, back up your prompts, or turn on <b>semantic search</b> (finds prompts by meaning).</p>
@@ -249,7 +283,7 @@ function showTour(i = 0) {
   const hk = pretty(state.settings.activeHotkey ?? state.settings.hotkey);
   $('#tour-step').textContent = `${tourAt + 1} / ${TOUR.length}`;
   $('#tour-title').textContent = TOUR[tourAt].title;
-  $('#tour-body').innerHTML = TOUR[tourAt].body(esc(hk));
+  $('#tour-body').innerHTML = TOUR[tourAt].body(esc(hk)).replaceAll('<kbd>Ctrl+', `<kbd>${modKey()}${isMac() ? '' : '+'}`);
   $('#tour-back').hidden = tourAt === 0;
   $('#tour-next').textContent = tourAt === TOUR.length - 1 ? 'Start using it' : 'Next';
   $('#tour').hidden = false;
@@ -385,6 +419,7 @@ function bind() {
 (async function init() {
   state.settings = await pd.settings();
   applyLook();
+  applyPlatform();
   drawSemantic(await pd.semantic.state());
   bind();
   runSearch();

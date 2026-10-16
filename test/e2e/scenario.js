@@ -192,6 +192,20 @@
     check('finds right one', titles()[0] === 'Bulk prompt 42', titles().slice(0, 3));
   });
 
+  await step('copy-only feedback', async () => {
+    await search('commit'); $('#q').focus(); await key('Enter', { ctrlKey: true }); await wait(200);
+    check('copy shows paste hint', !$('#toast').hidden && /Press Ctrl+V to paste/.test($('#toast').textContent), $('#toast').textContent);
+  });
+
+  await step('auto-paste off relabels hints', async () => {
+    await pd.setSettings({ autoPaste: false });
+    $('#q').focus(); await key(',', { ctrlKey: true }); await wait(300);
+    $('#s-autopaste').click(); $('#s-autopaste').click(); await wait(300); // toggle on→off via UI to re-apply labels
+    check('Enter hint says copy', $('.lbl-use').textContent === (((await pd.settings()).autoPaste) ? 'paste' : 'copy'), $('.lbl-use').textContent);
+    await pd.setSettings({ autoPaste: true });
+    $('[data-back]')[0].click(); await wait();
+  });
+
   await step('esc behaviour', async () => {
     $$('[data-back]')[0].click(); await wait();
     await search('abc'); $('#q').focus(); await key('Escape');

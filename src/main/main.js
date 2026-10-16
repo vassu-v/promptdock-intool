@@ -22,6 +22,9 @@ const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
 // PD_DATA_DIR overrides both (used by the e2e tests to run against a throwaway library).
 const dataDir = process.env.PD_DATA_DIR || (portableDir ? path.join(portableDir, 'PromptDock-data') : app.getPath('userData'));
 const E2E = !!process.env.PD_E2E;
+// Auto-paste is implemented for Windows only; elsewhere the prompt is copied and the user presses Cmd/Ctrl+V.
+const CAN_AUTO_PASTE = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
 fs.mkdirSync(dataDir, { recursive: true });
 const dbPath = path.join(dataDir, 'promptdock.sqlite');
 const modelDir = path.join(dataDir, 'models');
@@ -81,6 +84,7 @@ function createPanel() {
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
+  if (IS_MAC) panel.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   quitOnClose(panel);
   panel.loadFile(path.join(root, 'src', 'renderer', 'index.html'));
   panel.on('blur', () => { if (!modalOpen && !process.env.PD_KEEP_OPEN && !E2E) hidePanel(); });
@@ -138,6 +142,7 @@ function createBubble() {
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   bubble.setAlwaysOnTop(true, 'screen-saver');
+  if (IS_MAC) bubble.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   quitOnClose(bubble);
   bubble.loadFile(path.join(root, 'src', 'renderer', 'bubble.html'));
   bubble.once('ready-to-show', () => { if (settings.showBubble) bubble.showInactive(); });
@@ -165,9 +170,18 @@ function registerWithFallback(accel) {
   activeHotkey = HOTKEY_FALLBACKS.find(tryRegister) ?? null;
 }
 
+// Human label for an accelerator on this OS, e.g. Super+Alt+P → Win+Alt+P / ⌘⌥P.
+function keyLabel(accel) {
+  const map = IS_MAC ? { Super: '⌘', Control: '⌃', Alt: '⌥', Shift: '⇧' } : { Super: process.platform === 'win32' ? 'Win' : 'Super', Control: 'Ctrl' };
+  const parts = accel.split('+').map((k) => map[k] ?? k);
+  return parts.join(IS_MAC ? '' : '+');
+}
+
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(path.join(root, 'build', 'tray.png')));
-  tray.setToolTip(`PromptDock${activeHotkey ? ` (${activeHotkey.replace('Super', 'Win').replace('Control', 'Ctrl')})` : ''}`);
+  // macOS menu bar and Linux panels expect a small icon; Windows scales the 32 px one itself.
+  const trayImg = nativeImage.createFromPath(path.join(root, 'build', 'tray.png'));
+  tray = new Tray(process.platform === 'win32' ? trayImg : trayImg.resize({ width: IS_MAC ? 18 : 22, height: IS_MAC ? 18 : 22, quality: 'best' }));
+  tray.setToolTip(`PromptDock${activeHotkey ? ` (${keyLabel(activeHotkey)})` : ''}`);
   const menu = () => Menu.buildFromTemplate([
     { label: 'Open PromptDock', click: showPanel },
     { label: 'Show bubble', type: 'checkbox', checked: settings.showBubble, click: (i) => updateSettings({ showBubble: i.checked }) },
@@ -251,7 +265,7 @@ function registerIpc() {
   handle('tags:list', () => store.allTags());
   handle('slots:get', () => store.slotValues());
   handle('slots:set', (values) => store.setSlotValues(values));
-  handle('settings:get', () => ({ ...settings, hotkeyOk, activeHotkey, dataDir, portable: !!portableDir }));
+  handle('settings:get', () => ({ ...settings, hotkeyOk, activeHotkey, dataDir, portable: !!portableDir, platform: process.platform, canAutoPaste: CAN_AUTO_PASTE }));
   handle('settings:set', (patch) => updateSettings(patch));
   handle('semantic:state', () => semState);
   handle('semantic:enable', async () => { settings = store.setSettings({ semanticEnabled: true }); enableSemantic(); return true; });
@@ -265,10 +279,11 @@ function registerIpc() {
     lastText = text;
     store.markUsed(ids);
     if (Object.keys(values).length) store.setSlotValues(Object.fromEntries(Object.entries(values).filter(([, v]) => v)));
-    if (mode === 'copy') return text;
+    // Without auto-paste the renderer shows "Copied, press Ctrl+V" and closes the panel itself.
+    if (mode === 'copy' || !CAN_AUTO_PASTE || !settings.autoPaste) return { text, pasted: false };
     hidePanel();
-    if (settings.autoPaste && mode === 'paste') setTimeout(paste.sendPaste, 80);
-    return text;
+    setTimeout(paste.sendPaste, 80);
+    return { text, pasted: true };
   });
 
   handle('panel:hide', () => hidePanel());
@@ -335,6 +350,7 @@ app.on('will-quit', () => { globalShortcut.unregisterAll(); flush(); paste.dispo
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.vassu.promptdock');
+  if (IS_MAC) app.dock?.hide(); // background utility: menu bar icon + bubble, no Dock icon
   if (process.env.PD_THEME) nativeTheme.themeSource = process.env.PD_THEME; // test hook: light | dark
   await openStore();
   registerIpc();

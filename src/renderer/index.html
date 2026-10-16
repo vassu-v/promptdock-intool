@@ -20,8 +20,8 @@
     <div id="tray" class="tray" hidden></div>
     <ul id="results" class="results"></ul>
     <footer class="hints">
-      <span><kbd>↑↓</kbd> move</span><span><kbd>Enter</kbd> use</span><span><kbd>Tab</kbd> add to compose</span>
-      <span><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Ctrl+E</kbd> edit</span><span><kbd>Esc</kbd> close</span>
+      <span><kbd>↑↓</kbd> move</span><span><kbd>Enter</kbd> <span class="lbl-use">use</span></span><span><kbd>Tab</kbd> add to compose</span>
+      <span class="only-paste"><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Ctrl+E</kbd> edit</span><span><kbd>Esc</kbd> close</span>
     </footer>
   </section>
 
@@ -30,7 +30,7 @@
     <header class="vhead"><button class="icon" data-back>←</button><h2>Fill in the blanks</h2></header>
     <form id="fill-form" class="scroll"></form>
     <details class="preview" open><summary>Preview</summary><pre id="fill-preview"></pre></details>
-    <footer class="hints"><span><kbd>Enter</kbd> next / paste</span><span><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Esc</kbd> back</span></footer>
+    <footer class="hints"><span><kbd>Enter</kbd> next / <span class="lbl-final">paste</span></span><span class="only-paste"><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Esc</kbd> back</span></footer>
   </section>
 
   <!-- EDITOR -->
@@ -59,9 +59,10 @@
     <div class="scroll form">
       <label class="field">Global hotkey
         <input id="s-hotkey" readonly title="Click, then press the new shortcut"><small id="s-hotkey-msg"></small></label>
-      <label class="check"><input type="checkbox" id="s-autopaste"> Paste into the previous window automatically</label>
+      <label class="check" id="s-autopaste-row"><input type="checkbox" id="s-autopaste"> Paste into the previous window automatically</label>
+      <p class="muted" id="s-autopaste-note" hidden></p>
       <label class="check"><input type="checkbox" id="s-bubble"> Show floating bubble</label>
-      <label class="check"><input type="checkbox" id="s-login"> Start with Windows</label>
+      <label class="check"><input type="checkbox" id="s-login"> <span id="s-login-label">Start with Windows</span></label>
       <label class="field">Panel opacity <input type="range" id="s-opacity" min="0.55" max="1" step="0.01"></label>
       <label class="field">Separator between composed prompts
         <select id="s-sep"><option value="&#10;&#10;">Blank line</option><option value="&#10;&#10;---&#10;&#10;">--- divider</option><option value="&#10;">New line</option></select></label>
