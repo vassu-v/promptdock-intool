@@ -79,3 +79,13 @@ test('store: persists through bytes, embeddings round-trip, import/export', () =
   b.remove(p.id);
   assert.equal(b.embeddings('m').length, 0, 'cascade delete');
 });
+
+test('search ranks whole-word matches above prefixes', () => {
+  const ps = [42, 427, 428, 429].map((n) => ({ id: n, title: `Bulk prompt ${n}`, body: '', tags: [], pinned: false, useCount: 0 }));
+  assert.equal(search(ps, 'bulk prompt 42')[0].prompt.id, 42);
+});
+
+test('slot names can use non-Latin scripts', () => {
+  assert.deepEqual(parseSlots('नमस्ते {{नाम}} {{名前:太郎}}').map((s) => s.name), ['नाम', '名前']);
+  assert.equal(fillSlots('Hi {{नाम}}', { 'नाम': 'Asha' }), 'Hi Asha');
+});

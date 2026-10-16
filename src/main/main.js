@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, screen, dialog, nativeImage } from 'electron';
+import { app, nativeTheme, BrowserWindow, globalShortcut, ipcMain, clipboard, Tray, Menu, screen, dialog, nativeImage } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,7 @@ let store, panel, bubble, tray;
 let settings;
 let modalOpen = false;
 let firstRun = false;
+let quitting = false;
 let lastText = null;
 let saveTimer = null;
 let pendingBytes = null;
@@ -79,8 +80,20 @@ function createPanel() {
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
+  quitOnClose(panel);
   panel.loadFile(path.join(root, 'src', 'renderer', 'index.html'));
   panel.on('blur', () => { if (!modalOpen && !process.env.PD_KEEP_OPEN && !E2E) hidePanel(); });
+}
+
+// Windows closes our windows on shutdown/sign-out or `taskkill`; treat that as Quit
+// instead of leaving an invisible process that still holds the hotkey.
+function quitOnClose(win) {
+  win.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    // Quitting from inside a prevented close would cancel the quit, so defer it.
+    setImmediate(() => app.quit());
+  });
 }
 
 function positionPanel() {
@@ -92,8 +105,11 @@ function positionPanel() {
   });
 }
 
-function showPanel() {
-  if (!panel.isVisible()) paste.rememberForeground();
+const hwndOf = (w) => (w && !w.isDestroyed() ? String(w.getNativeWindowHandle().readBigUInt64LE()) : '');
+
+async function showPanel() {
+  if (!panel || panel.isDestroyed()) return;
+  if (!panel.isVisible()) await paste.rememberForeground([hwndOf(panel), hwndOf(bubble)]);
   positionPanel();
   panel.show();
   panel.focus();
@@ -121,6 +137,7 @@ function createBubble() {
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   bubble.setAlwaysOnTop(true, 'screen-saver');
+  quitOnClose(bubble);
   bubble.loadFile(path.join(root, 'src', 'renderer', 'bubble.html'));
   bubble.once('ready-to-show', () => { if (settings.showBubble) bubble.showInactive(); });
 }
@@ -308,10 +325,13 @@ async function runE2E() {
 // ---------- lifecycle ----------
 app.on('second-instance', () => showPanel());
 app.on('window-all-closed', (e) => e.preventDefault?.());
+app.on('before-quit', () => { quitting = true; });
+app.on('session-end', flush); // Windows shutdown / sign-out
 app.on('will-quit', () => { globalShortcut.unregisterAll(); flush(); paste.dispose(); });
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.vassu.promptdock');
+  if (process.env.PD_THEME) nativeTheme.themeSource = process.env.PD_THEME; // test hook: light | dark
   await openStore();
   registerIpc();
   createPanel();
