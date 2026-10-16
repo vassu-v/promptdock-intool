@@ -77,6 +77,7 @@ function createPanel() {
     width: PANEL_W, height: PANEL_H, show: false, frame: false, transparent: true,
     resizable: false, skipTaskbar: true, alwaysOnTop: true, fullscreenable: false,
     maximizable: false, minimizable: false, hasShadow: false,
+    icon: path.join(root, 'build', 'icon.png'),
     webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   panel.setAlwaysOnTop(true, 'screen-saver');
@@ -165,7 +166,7 @@ function registerWithFallback(accel) {
 }
 
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(path.join(root, 'build', 'icon.png')).resize({ width: 16, height: 16 }));
+  tray = new Tray(nativeImage.createFromPath(path.join(root, 'build', 'tray.png')));
   tray.setToolTip(`PromptDock${activeHotkey ? ` (${activeHotkey.replace('Super', 'Win').replace('Control', 'Ctrl')})` : ''}`);
   const menu = () => Menu.buildFromTemplate([
     { label: 'Open PromptDock', click: showPanel },
@@ -356,6 +357,7 @@ app.whenReady().then(async () => {
       if (process.env.PD_SNAP_JS) console.log('[js]', JSON.stringify(await panel.webContents.executeJavaScript(process.env.PD_SNAP_JS)));
       await new Promise((r) => setTimeout(r, +(process.env.PD_SNAP_WAIT ?? 600)));
       if (panel.isVisible()) fs.writeFileSync(process.env.PD_SNAP, (await panel.webContents.capturePage()).toPNG());
+      if (process.env.PD_SNAP_BUBBLE) fs.writeFileSync(process.env.PD_SNAP_BUBBLE, (await bubble.webContents.capturePage()).toPNG());
       app.quit();
     });
   }

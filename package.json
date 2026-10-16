@@ -13,7 +13,8 @@
     "test": "node --test test/*.test.js",
     "dist": "electron-builder --win",
     "pack": "electron-builder --win dir",
-    "test:e2e": "node test/e2e/run.js"
+    "test:e2e": "node test/e2e/run.js",
+    "icon": "electron scripts/make-icon.cjs"
   },
   "dependencies": {
     "sql.js": "1.15.0"
@@ -37,7 +38,7 @@
     },
     "files": [
       "src/**/*",
-      "build/icon.png",
+      "build/*.png",
       "package.json",
       "!**/node_modules/onnxruntime-web/**",
       "!**/node_modules/onnxruntime-node/bin/napi-v6/{linux,darwin}/**",
@@ -56,7 +57,7 @@
       "**/node_modules/@img/**"
     ],
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"

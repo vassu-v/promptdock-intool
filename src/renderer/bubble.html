@@ -4,12 +4,15 @@
 <style>
   html,body{margin:0;background:transparent;overflow:hidden;user-select:none}
   #b{width:44px;height:44px;margin:6px;border-radius:50%;display:grid;place-items:center;cursor:pointer;
-     font:700 15px/1 Consolas,monospace;color:#fff;letter-spacing:-1px;
-     background:linear-gradient(160deg,rgba(99,102,241,.78),rgba(59,122,211,.78));
-     box-shadow:0 2px 8px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.25);opacity:.55;transition:opacity .15s,transform .15s}
+     color:#fff;
+     background:linear-gradient(135deg,rgba(79,70,229,.85),rgba(124,58,237,.85) 55%,rgba(192,38,211,.85));
+     box-shadow:0 2px 8px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.25);opacity:.8;transition:opacity .15s,transform .15s}
   #b:hover{opacity:1;transform:scale(1.06)}
+  .mark{width:26px;height:26px}
+  #b:hover .cursor{animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
 </style></head>
-<body><div id="b" title="PromptDock (Ctrl+Win+P) — drag to move">&gt;_</div>
+<body><div id="b" title="PromptDock: click to open, drag to move"><svg class="mark" viewBox="0 0 256 256" aria-hidden="true"><g transform="translate(6 0)"><path d="M84 192 V68 h50 a42 42 0 0 1 0 84 h-50" fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="M120 94 l16 16 -16 16" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><rect class="cursor" x="146" y="176" width="54" height="18" rx="9" fill="currentColor"/></g></svg></div>
 <script>
   const b = document.getElementById('b');
   let down = null, moved = false;
