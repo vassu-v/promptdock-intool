@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<title>PromptDock</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="panel" id="panel">
+  <!-- SEARCH -->
+  <section id="view-search" class="view">
+    <div class="searchbar">
+      <span class="logo">&gt;_</span>
+      <input id="q" placeholder="Search prompts…  (#tag to filter)" autocomplete="off" spellcheck="false">
+      <span id="sem-badge" class="badge" hidden>semantic</span>
+      <button class="icon" id="btn-new" title="New prompt (Ctrl+N)">＋</button>
+      <button class="icon" id="btn-settings" title="Settings (Ctrl+,)">⚙</button>
+    </div>
+    <div id="tray" class="tray" hidden></div>
+    <ul id="results" class="results"></ul>
+    <footer class="hints">
+      <span><kbd>↑↓</kbd> move</span><span><kbd>Enter</kbd> use</span><span><kbd>Tab</kbd> add to compose</span>
+      <span><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Ctrl+E</kbd> edit</span><span><kbd>Esc</kbd> close</span>
+    </footer>
+  </section>
+
+  <!-- FILL SLOTS -->
+  <section id="view-fill" class="view" hidden>
+    <header class="vhead"><button class="icon" data-back>←</button><h2>Fill in the blanks</h2></header>
+    <form id="fill-form" class="scroll"></form>
+    <details class="preview" open><summary>Preview</summary><pre id="fill-preview"></pre></details>
+    <footer class="hints"><span><kbd>Enter</kbd> next / paste</span><span><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd>Esc</kbd> back</span></footer>
+  </section>
+
+  <!-- EDITOR -->
+  <section id="view-edit" class="view" hidden>
+    <header class="vhead"><button class="icon" data-back>←</button><h2 id="edit-title">New prompt</h2>
+      <label class="pin"><input type="checkbox" id="e-pinned"> Pinned</label></header>
+    <div class="scroll form">
+      <input id="e-title" placeholder="Title (optional — first line is used)">
+      <input id="e-tags" placeholder="Tags, comma separated">
+      <textarea id="e-body" placeholder="Prompt text. Add slots like {{file}} or {{tone:friendly}}"></textarea>
+      <div class="row">
+        <button type="button" id="e-slot">Make selection a {{slot}}</button>
+        <span id="e-slots" class="slots"></span>
+      </div>
+    </div>
+    <footer class="actions">
+      <button id="e-delete" class="danger" hidden>Delete</button>
+      <span class="grow"></span>
+      <button data-back>Cancel</button><button id="e-save" class="primary">Save <kbd>Ctrl+S</kbd></button>
+    </footer>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="view" hidden>
+    <header class="vhead"><button class="icon" data-back>←</button><h2>Settings</h2></header>
+    <div class="scroll form">
+      <label class="field">Global hotkey
+        <input id="s-hotkey" readonly title="Click, then press the new shortcut"><small id="s-hotkey-msg"></small></label>
+      <label class="check"><input type="checkbox" id="s-autopaste"> Paste into the previous window automatically</label>
+      <label class="check"><input type="checkbox" id="s-bubble"> Show floating bubble</label>
+      <label class="check"><input type="checkbox" id="s-login"> Start with Windows</label>
+      <label class="field">Panel opacity <input type="range" id="s-opacity" min="0.55" max="1" step="0.01"></label>
+      <label class="field">Separator between composed prompts
+        <select id="s-sep"><option value="&#10;&#10;">Blank line</option><option value="&#10;&#10;---&#10;&#10;">--- divider</option><option value="&#10;">New line</option></select></label>
+
+      <h3>Semantic search <span id="s-sem-status" class="badge"></span></h3>
+      <p class="muted">Finds prompts by meaning, not just words. Downloads a small model (~23 MB) once and runs fully offline on the CPU.</p>
+      <div class="row"><button id="s-sem-toggle"></button><button id="s-sem-remove" class="danger">Remove model</button></div>
+
+      <h3>Saved slot values</h3>
+      <p class="muted">Remembered on this computer only. Edit or clear them here.</p>
+      <div id="s-slots" class="slotlist"></div>
+
+      <h3>Data</h3>
+      <div class="row"><button id="s-import">Import JSON</button><button id="s-export">Export JSON</button></div>
+      <p class="muted" id="s-datadir"></p>
+    </div>
+  </section>
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
