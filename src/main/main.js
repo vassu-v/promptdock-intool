@@ -81,6 +81,7 @@ function positionPanel() {
 }
 
 function showPanel() {
+  if (!panel.isVisible()) paste.rememberForeground();
   positionPanel();
   panel.show();
   panel.focus();
@@ -229,7 +230,7 @@ function registerIpc() {
     if (Object.keys(values).length) store.setSlotValues(Object.fromEntries(Object.entries(values).filter(([, v]) => v)));
     if (mode === 'copy') return text;
     hidePanel();
-    if (settings.autoPaste && mode === 'paste') setTimeout(paste.sendPaste, 120);
+    if (settings.autoPaste && mode === 'paste') setTimeout(paste.sendPaste, 80);
     return text;
   });
 
@@ -287,11 +288,12 @@ app.whenReady().then(async () => {
   if (process.env.PD_SNAP) {
     panel.webContents.on('console-message', (e) => console.log('[renderer]', e.level, e.message));
     panel.once('ready-to-show', async () => {
+      await new Promise((r) => setTimeout(r, +(process.env.PD_SNAP_DELAY ?? 0)));
       showPanel();
       await new Promise((r) => setTimeout(r, 700));
       if (process.env.PD_SNAP_JS) console.log('[js]', JSON.stringify(await panel.webContents.executeJavaScript(process.env.PD_SNAP_JS)));
-      await new Promise((r) => setTimeout(r, 600));
-      fs.writeFileSync(process.env.PD_SNAP, (await panel.webContents.capturePage()).toPNG());
+      await new Promise((r) => setTimeout(r, +(process.env.PD_SNAP_WAIT ?? 600)));
+      if (panel.isVisible()) fs.writeFileSync(process.env.PD_SNAP, (await panel.webContents.capturePage()).toPNG());
       app.quit();
     });
   }
