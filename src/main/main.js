@@ -213,7 +213,10 @@ async function enableSemantic() {
   } catch (e) {
     semantic.unload();
     settings = store.setSettings({ semanticEnabled: false });
-    semBroadcast({ status: 'error', error: String(e.message ?? e) });
+    const offline = /fetch failed|ENOTFOUND|ECONN|network|getaddrinfo/i.test(String(e.message ?? e));
+    semBroadcast({ status: 'error', error: offline
+      ? 'Could not download the search model. Check your internet connection and try again (it is only needed once).'
+      : `Semantic search could not start: ${e.message ?? e}` });
   }
 }
 

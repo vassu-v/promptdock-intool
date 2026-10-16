@@ -26,6 +26,7 @@ export async function load(cacheDir, onProgress = () => {}) {
     const { pipeline, env } = await import('@huggingface/transformers');
     env.cacheDir = cacheDir;
     env.allowLocalModels = true;
+    if (process.env.PD_MODEL_HOST) env.remoteHost = process.env.PD_MODEL_HOST; // test hook (e.g. simulate offline)
     extractor = await pipeline('feature-extraction', MODEL, {
       dtype: 'q8',
       progress_callback: (e) => { if (e.status === 'progress') onProgress(Math.round(e.progress ?? 0)); },

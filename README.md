@@ -5,6 +5,8 @@ hit Enter, and the prompt is pasted into whatever app you were in (Antigravity, 
 
 ![panel](docs/panel.png)
 
+**New users: read the [User Guide](docs/USER_GUIDE.md).** The app also shows a 5-step tour on first launch.
+
 ## Features
 
 - **Instant search**: keyword + typo-tolerant fuzzy matching, `#tag` filters.
@@ -57,11 +59,13 @@ Requires Node.js 22+ (developed on Node 24). No Rust, Python or system installs 
 npm install
 npm start          # run the app
 npm test           # unit tests (core logic)
+npm run test:e2e   # drives the real app UI (55 checks), against a throwaway data folder
 npm run pack       # unpacked build in dist/win-unpacked
 npm run dist       # installer + portable exe in dist/
 ```
 
-Test hooks for scripted UI checks: `PD_SNAP=out.png` captures the panel after launch then quits;
+Test hooks: `PD_E2E=<file>` runs a scenario inside the panel (used by `test:e2e`; `node test/e2e/run.js <path-to.exe>` tests a packaged build); `PD_DATA_DIR` uses a different data folder; `PD_DEBUG=1` logs paste/focus decisions; `PD_THEME=light|dark` forces a theme; `PD_MODEL_HOST` overrides the model server (e.g. to simulate offline).
+Screenshot hooks: `PD_SNAP=out.png` captures the panel after launch then quits;
 `PD_SNAP_JS` runs code in the panel first; `PD_SNAP_DELAY`/`PD_SNAP_WAIT` add pauses;
 `PD_KEEP_OPEN=1` stops the panel hiding on blur.
 
@@ -94,7 +98,30 @@ would need:
 
 A browser extension would be the same shim plus a popup.
 
+## Testing
+
+| Layer | How | Covers |
+|---|---|---|
+| Unit | `npm test` (node:test) | slots (incl. non-Latin names), compose, search ranking/fuzzy/tags/semantic blend, SQLite CRUD, persistence, embeddings, import/export |
+| UI end-to-end | `npm run test:e2e` | tour, search + keyboard nav, create/edit/delete, empty-body validation, make-slot, fill flow + remembered values, compose, HTML escaping, every setting, hotkey rebinding + rejection, import/export, 500-prompt performance, Esc behaviour |
+| Manual (real keyboard/mouse) | checklist below | things only a real desktop can prove |
+
+Manual checklist (last run for 0.2.0, all passing): real hotkey opens/closes over another app ·
+Enter pastes into Notepad · slot form via keyboard pastes filled text · bubble click opens, drag moves
+without opening, position survives restart · clicking away hides the panel · Windows close request
+quits cleanly · light and dark themes · offline semantic enable shows a clear error and keyword
+search keeps working · packaged build (installer + portable) runs the e2e suite.
+
+Known limits: Windows-only (auto-paste uses Win32; the rest of the code is portable to macOS); auto-paste
+cannot reach apps running as administrator (Windows UIPI); using a prompt replaces the clipboard.
+
 ## Changelog
+
+- **0.2.0**: first-run tour, [User Guide](docs/USER_GUIDE.md), e2e test suite. Fixes: auto-paste failing when
+  opened with the real hotkey (focus race + Windows foreground lock); app lingering invisibly after a Windows close
+  request; Delete button doing nothing; exact words ranking below prefixes ("42" vs "429"); slot names in
+  non-Latin scripts; crash if the database file is briefly locked; bubble lost after unplugging a monitor; tray
+  click making the taskbar the paste target; unclear errors for bad import files and offline model download.
 
 - **0.1.0**: first release. Search, slots with fill-and-paste, compose, editor, settings,
   bubble, tray, optional semantic search, import/export, installer and portable builds.
