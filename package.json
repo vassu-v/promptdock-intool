@@ -1,8 +1,8 @@
 {
   "name": "promptdock",
   "productName": "PromptDock",
-  "version": "0.2.1",
-  "description": "A translucent always-on-top prompt library for Windows: search, compose, fill slots, paste.",
+  "version": "0.3.0",
+  "description": "A translucent, always-on-top prompt library: hotkey, search, fill-in slots, compose, paste.",
   "type": "module",
   "main": "src/main/main.js",
   "author": "vassu-v",
@@ -76,5 +76,9 @@
       "artifactName": "PromptDock-Portable-${version}.exe"
     },
     "compression": "maximum"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vassu-v/promptdock-intool.git"
   }
 }

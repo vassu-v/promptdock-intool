@@ -4,6 +4,11 @@ PromptDock keeps your favourite AI prompts one shortcut away. Press a key, type 
 words, press Enter, and the prompt is typed into whatever you were using: ChatGPT,
 Antigravity, Claude, an IDE, an email.
 
+> **On a Mac or Linux?** Everything below works the same, with three differences: the shortcut is
+> **⌘ Cmd + ⌥ Option + P** (Linux: **Super + Alt + P**), `Ctrl` shortcuts become `⌘` on Mac, and PromptDock
+> **copies** the prompt instead of pasting it, so press **⌘V** / **Ctrl+V** yourself. To start it, see the
+> [Quick start in the README](../README.md#-quick-start).
+
 > The app shows a short tour the first time it opens. You can replay it any time:
 > **⚙ Settings → Show the tour again**.
 
@@ -45,6 +50,7 @@ Press the shortcut again, press **Esc**, or click anywhere else to close it.
    Type `#tag` to show only prompts with that tag, e.g. `#code`.
 3. Use **↑ / ↓** to pick one and press **Enter**.
 4. PromptDock closes and **pastes the prompt** where your cursor was.
+   (Mac/Linux, or with *Paste automatically* off: it shows **"Copied ✓ Press Ctrl+V to paste"**. Press it in your chat box.)
 
 **Want it on the clipboard instead?** Press **Ctrl + Enter**. Then paste it wherever you
 like with Ctrl + V.
