@@ -73,9 +73,9 @@ export function search(prompts, query, { semantic = null, limit = 50 } = {}) {
   for (const p of tagged) {
     const k = keywordScore(p, words);
     const s = semantic?.get(p.id) ?? 0;
-    // Semantic hits below the threshold are ignored so random prompts don't creep in.
-    const sem = s >= 0.3 ? s : 0;
-    const score = semantic ? Math.max(k, 0.6 * k + 0.6 * sem) : k;
+    // MiniLM similarities for related short texts sit around 0.2-0.6; below 0.2 is noise.
+    const sem = s >= 0.2 ? s : 0;
+    const score = semantic ? Math.max(k, 0.5 * k + sem) : k;
     if (score > 0) scored.push({ prompt: p, score: score + (p.pinned ? 0.02 : 0) });
   }
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
