@@ -1,3 +1,5 @@
+<img src="build/icon.svg" width="72" alt="PromptDock logo">
+
 # PromptDock
 
 A translucent, always-on-top prompt library for Windows. Press a hotkey, type a few words,
@@ -51,6 +53,18 @@ PromptDock therefore tries your chosen key first, then falls back to `Win+Alt+P`
 
 The builds are unsigned, so Windows SmartScreen may warn on first run: choose *More info → Run anyway*.
 
+## Run from source (no installer)
+
+Anyone with the code can run it as a normal app:
+
+1. Install [Node.js](https://nodejs.org) 22 or newer (LTS is fine).
+2. Copy or clone this folder. **Leave out `node_modules` and `dist`**: they are large and get recreated.
+3. Double-click **`PromptDock.cmd`**. The first run downloads dependencies (~600 MB, a few minutes);
+   after that it starts instantly, with no console window left open.
+
+It behaves exactly like the installed app: hotkey, bubble, tray and auto-paste, with data in `%APPDATA%promptdock`.
+To start it with Windows, use *Settings → Start with Windows*, or put a shortcut to `PromptDock.cmd` in `shell:startup`.
+
 ## Develop
 
 Requires Node.js 22+ (developed on Node 24). No Rust, Python or system installs are needed.
@@ -62,6 +76,7 @@ npm test           # unit tests (core logic)
 npm run test:e2e   # drives the real app UI (55 checks), against a throwaway data folder
 npm run pack       # unpacked build in dist/win-unpacked
 npm run dist       # installer + portable exe in dist/
+npm run icon       # re-render build/icon.png, tray.png, icon.ico from build/icon.svg
 ```
 
 Test hooks: `PD_E2E=<file>` runs a scenario inside the panel (used by `test:e2e`; `node test/e2e/run.js <path-to.exe>` tests a packaged build); `PD_DATA_DIR` uses a different data folder; `PD_DEBUG=1` logs paste/focus decisions; `PD_THEME=light|dark` forces a theme; `PD_MODEL_HOST` overrides the model server (e.g. to simulate offline).
@@ -115,7 +130,16 @@ search keeps working · packaged build (installer + portable) runs the e2e suite
 Known limits: Windows-only (auto-paste uses Win32; the rest of the code is portable to macOS); auto-paste
 cannot reach apps running as administrator (Windows UIPI); using a prompt replaces the clipboard.
 
+## Brand
+
+The mark is a **P** whose bowl holds a `>` prompt chevron, followed by a `_` cursor: "P_", a prompt waiting
+for input. The source is `build/icon.svg` (gradient #4F46E5 → #7C3AED → #C026D3). The bubble and panel use the
+glyph-only version, and its cursor blinks on hover and focus.
+
 ## Changelog
+
+- **0.2.1**: new P_ brand mark for the app, installer, tray, bubble and panel. `PromptDock.cmd` runs the app from
+  source. Fix: fresh clones got no Electron runtime, because npm 11 skips its install script (a postinstall now handles it).
 
 - **0.2.0**: first-run tour, [User Guide](docs/USER_GUIDE.md), e2e test suite. Fixes: auto-paste failing when
   opened with the real hotkey (focus race + Windows foreground lock); app lingering invisibly after a Windows close
