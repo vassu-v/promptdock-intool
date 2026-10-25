@@ -97,7 +97,7 @@ async function run() {
 
   await step('stale save is refused', async () => {
     const name = await js(A, `(async () => {
-      const { openStorage } = await import('/web/storage.js');
+      const { openStorage } = await import(new URL('storage.js', location.href).href);
       const s = await openStorage();
       const r = await s.read();
       try { await s.write(r.bytes, r.version); return 'saved over newer data'; } catch (e) { return e.name; }
