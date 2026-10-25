@@ -11,14 +11,15 @@ const types = {
   '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.md': 'text/markdown; charset=utf-8',
 };
 
-export function start(port = 0) {
+export function start(port = 0, dir = root) {
+  dir = path.resolve(dir);
   const server = http.createServer((req, res) => {
     const notFound = () => { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found'); };
     let rel;
     try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { return notFound(); }
     if (rel.endsWith('/')) rel += 'index.html'; // like GitHub Pages
-    const file = path.resolve(root, '.' + rel);
-    if (file !== root && !file.startsWith(root + path.sep)) return notFound();
+    const file = path.resolve(dir, '.' + rel);
+    if (file !== dir && !file.startsWith(dir + path.sep)) return notFound();
     const type = types[path.extname(file).toLowerCase()];
     if (!type) return notFound();
     fs.stat(file, (err, st) => {
