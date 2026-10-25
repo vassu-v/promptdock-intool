@@ -106,6 +106,17 @@
     await key('Escape');
   });
 
+  await step('enter right after typing', async () => {
+    document.querySelector('.view:not([hidden]) [data-back]')?.click(); await wait(250);
+    const q = $('#q'); q.focus(); q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); await wait(200);
+    q.value = 'respnsive'; q.dispatchEvent(new Event('input', { bubbles: true }));
+    q.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); // no wait: beat the debounce
+    await wait(500);
+    const used = (await pd.testLast()) ?? '';
+    check('Enter right after typing uses the new top result', used.startsWith('Make this layout'), used.slice(0, 40));
+    document.querySelector('#copybox-close')?.click();
+  });
+
   await step('compose', async () => {
     await search('#git'); $('#q').focus(); await key('Tab');
     await search('#ui'); $('#q').focus(); await key('Tab');

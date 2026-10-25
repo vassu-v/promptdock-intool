@@ -86,3 +86,8 @@ input[type=checkbox],input[type=range]{accent-color:var(--accent)}
 .tour-top{display:flex;justify-content:space-between;align-items:center}
 .tour-nav{margin-top:12px}
 .tour code{font:12px Consolas,monospace;background:var(--accent2);color:var(--accent);padding:1px 5px;border-radius:4px}
+.results li{position:relative}
+.results li .edit{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;background:var(--bg3);transition:opacity .12s}
+.results li:hover .edit,.results li.sel .edit,.results li .edit:focus{opacity:1}
+.results li{padding-right:40px}
+.results .tags{max-width:42vw;overflow:hidden;text-overflow:ellipsis}

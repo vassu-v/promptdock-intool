@@ -31,6 +31,15 @@ function show(view) {
 
 // ---------------- search ----------------
 let searchSeq = 0;
+let searchTimer = null;
+let searchDone = Promise.resolve();
+
+/** Run any search still waiting on the typing debounce, and wait for the latest one to finish. */
+function flushSearch() {
+  if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; searchDone = runSearch(); }
+  return searchDone;
+}
+
 async function runSearch() {
   const seq = ++searchSeq;
   const res = await pd.search($('#q').value);
@@ -43,7 +52,7 @@ async function runSearch() {
 function drawResults() {
   const ul = $('#results');
   if (!state.results.length) {
-    ul.innerHTML = `<li class="empty">${$('#q').value ? 'No matches. <b>Ctrl+N</b> to save a new prompt.' : 'No prompts yet. <b>Ctrl+N</b> to add one.'}</li>`;
+    ul.innerHTML = `<li class="empty">${$('#q').value ? `No matches. <b>${newKey()}</b> to save a new prompt.` : `No prompts yet. <b>${newKey()}</b> to add one.`}</li>`;
     return;
   }
   const inTray = new Set(state.tray.map((p) => p.id));
@@ -53,6 +62,7 @@ function drawResults() {
       <span class="t">${esc(p.title)}</span>
       <span class="tags">${p.tags.map((t) => '#' + esc(t)).join(' ')}</span>
       <span class="b">${esc(p.body.replace(/\s+/g, ' '))}</span>
+      <button class="edit icon" data-edit="${i}" title="Edit" aria-label="Edit ${esc(p.title)}">✎</button>
     </li>`).join('');
   ul.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
 }
@@ -103,12 +113,40 @@ async function finishUse(prompts, values, mode) {
   state.tray = [];
   drawTray();
   if (res.pasted) return;
+  if (res.copied === false) { show('search'); showCopyBox(res.text); return; }
   // Copied but not pasted (copy-only, auto-paste off, or macOS/Linux): say so, then get out of the way.
   show('search');
   runSearch();
   toast(`Copied ✓ Press ${combo('V')} to paste`, 1600);
   clearTimeout(finishUse.t);
   finishUse.t = setTimeout(() => pd.hide(), 1300);
+}
+
+// The browser refused to copy without a click: show the text with a Copy button instead.
+function showCopyBox(text) {
+  let box = $('#copybox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'copybox';
+    box.className = 'tour';
+    box.innerHTML = `<div class="card"><h2>Ready to copy</h2>
+      <textarea readonly rows="7" style="width:100%;min-height:0"></textarea>
+      <div class="row tour-nav"><button id="copybox-close">Close</button><span class="grow"></span><button id="copybox-copy" class="primary">Copy</button></div></div>`;
+    $('#panel').append(box);
+    $('#copybox-close').addEventListener('click', () => { box.hidden = true; $('#q').focus(); });
+    $('#copybox-copy').addEventListener('click', async () => {
+      const ta = box.querySelector('textarea');
+      ta.select();
+      let ok = false;
+      try { await navigator.clipboard.writeText(ta.value); ok = true; } catch { ok = document.execCommand('copy'); }
+      box.hidden = true;
+      toast(ok ? `Copied ✓ Press ${combo('V')} to paste` : `Select the text and press ${combo('C')}`, 2500);
+      $('#q').focus();
+    });
+  }
+  box.querySelector('textarea').value = text;
+  box.hidden = false;
+  $('#copybox-copy').focus();
 }
 
 // ---------------- editor ----------------
@@ -170,12 +208,16 @@ async function openSettings() {
 }
 
 // ---------------- platform labels ----------------
-const isMac = () => state.settings?.platform === 'darwin';
+const isMac = () => state.settings?.platform === 'darwin' || !!state.settings?.macKeys;
+const isWeb = () => state.settings?.platform === 'web';
+/** Ctrl+N is reserved by browsers, so the web build uses Alt+N for a new prompt. */
+const newKey = () => (isWeb() ? (isMac() ? '⌥N' : 'Alt+N') : combo('N'));
+const where = () => (isWeb() ? 'in this browser' : 'on this computer');
 const modKey = () => (isMac() ? '⌘' : 'Ctrl');
 /** Shortcut with the platform's main modifier: ⌘V on macOS, Ctrl+V elsewhere. */
 const combo = (k) => (isMac() ? `⌘${k}` : `Ctrl+${k}`);
 const autoPasteOn = () => state.settings?.canAutoPaste && state.settings?.autoPaste;
-const osName = () => ({ darwin: 'macOS', win32: 'Windows' }[state.settings?.platform] ?? 'your desktop');
+const osName = () => ({ darwin: 'macOS', win32: 'Windows', web: 'the web' }[state.settings?.platform] ?? 'your desktop');
 
 function pretty(accel) {
   const map = isMac() ? { Super: '⌘ Cmd', Control: '⌃ Ctrl', Alt: '⌥ Option', Shift: '⇧ Shift' }
@@ -189,6 +231,9 @@ function applyPlatform() {
     document.querySelectorAll('kbd').forEach((k) => { k.textContent = k.textContent.replace('Ctrl+', '⌘'); });
     document.querySelectorAll('[title]').forEach((el) => { el.title = el.title.replace('Ctrl+', '⌘'); });
   }
+  document.querySelectorAll('[data-newkey]').forEach((el) => { el.textContent = newKey(); });
+  document.querySelectorAll('.lbl-esc').forEach((el) => { el.textContent = isWeb() ? 'clear' : 'close'; });
+  if (isWeb()) $('#btn-new').title = `New prompt (${newKey()})`;
   const paste = autoPasteOn();
   document.querySelectorAll('.lbl-use').forEach((el) => { el.textContent = paste ? 'paste' : 'copy'; });
   document.querySelectorAll('.lbl-final').forEach((el) => { el.textContent = paste ? 'paste' : 'copy'; });
@@ -258,9 +303,12 @@ function backToSearch() {
 
 // ---------------- first-run tour ----------------
 const TOUR = [
-  { title: 'Welcome to PromptDock 👋', body: (hk) => `<p>Your prompt library, one shortcut away.</p>
+  { title: 'Welcome to PromptDock 👋', body: (hk) => isWeb()
+    ? `<p>Your prompt library, right here in the browser. No account, nothing uploaded: your prompts stay ${where()}.</p>
+       <p>Keep this tab pinned, press <kbd>/</kbd> to jump to search. Want a global hotkey and auto-paste into any app? Grab the desktop version.</p>`
+    : `<p>Your prompt library, one shortcut away.</p>
     <p>Press <kbd>${hk}</kbd> anywhere on ${osName()} to open or close this panel. You can also click the small
-    <b>&gt;_</b> bubble on the edge of your screen, or the tray icon.</p>` },
+    <b>P_</b> bubble on the edge of your screen, or the tray icon.</p>` },
   { title: 'Find a prompt and use it', body: () => `<ul>
     <li>Start typing to search. Small typos are fine. Use <code>#tag</code> to filter.</li>
     <li><kbd>↑</kbd> <kbd>↓</kbd> to choose, then <kbd>Enter</kbd>.</li>
@@ -270,11 +318,15 @@ const TOUR = [
       : `<li>The prompt is <b>copied</b>. Click back into your chat box and press <kbd>${combo('V')}</kbd>.</li>`}</ul>` },
   { title: 'Fill in the blanks', body: () => `<p>Prompts can have slots like <code>{{file}}</code> or <code>{{tone:friendly}}</code> (the part after <b>:</b> is a default).</p>
     <p>When you use one, PromptDock asks for each value. <kbd>Enter</kbd> moves to the next. The last <kbd>Enter</kbd> fills them in and ${autoPasteOn() ? 'pastes' : 'copies'}.
-    Your answers are remembered on this PC for next time.</p>` },
+    Your answers are remembered ${where()} for next time.</p>` },
   { title: 'Combine and edit', body: () => `<ul>
     <li><kbd>Tab</kbd> adds the highlighted prompt to a compose tray. Add a few, then <kbd>Enter</kbd> ${autoPasteOn() ? 'pastes' : 'copies'} them all in order.</li>
-    <li><kbd>Ctrl+N</kbd> new prompt, <kbd>Ctrl+E</kbd> or right-click to edit, <kbd>Esc</kbd> to close.</li></ul>` },
-  { title: 'Make it yours', body: () => `<p>Open <b>⚙ Settings</b> (<kbd>Ctrl+,</kbd>) to change the shortcut, opacity and auto-paste,
+    <li><kbd>${newKey()}</kbd> new prompt, <kbd>Ctrl+E</kbd> or right-click to edit, <kbd>Esc</kbd> to ${isWeb() ? 'clear the search' : 'close'}.</li></ul>` },
+  { title: 'Make it yours', body: () => isWeb()
+    ? `<p>Open <b>⚙ Settings</b> (<kbd>Ctrl+,</kbd>) to <b>back up your prompts</b> (Export JSON: do this now and then, since clearing browser data erases them),
+    edit remembered answers, or turn on <b>semantic search</b> (finds prompts by meaning, runs in your browser).</p>
+    <p>You can replay this tour from Settings at any time.</p>`
+    : `<p>Open <b>⚙ Settings</b> (<kbd>Ctrl+,</kbd>) to change the shortcut, opacity and auto-paste,
     hide the bubble, start with Windows, back up your prompts, or turn on <b>semantic search</b> (finds prompts by meaning).</p>
     <p>You can replay this tour from Settings at any time.</p>` },
 ];
@@ -310,8 +362,11 @@ function armed(btn, label) {
 
 // ---------------- wiring ----------------
 function bind() {
-  let deb;
-  $('#q').addEventListener('input', () => { clearTimeout(deb); state.sel = 0; deb = setTimeout(runSearch, 70); });
+  $('#q').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    state.sel = 0;
+    searchTimer = setTimeout(() => { searchTimer = null; searchDone = runSearch(); }, 70);
+  });
 
   document.addEventListener('keydown', (e) => {
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
@@ -321,14 +376,19 @@ function bind() {
       else if (k === 'ArrowLeft' && tourAt > 0) { e.preventDefault(); showTour(tourAt - 1); }
       return;
     }
+    if (k === '/' && state.view === 'search' && !e.target.matches('input, textarea, select')) { e.preventDefault(); $('#q').focus(); return; }
     if (state.view === 'search') {
       const cur = state.results[state.sel];
       if (k === 'ArrowDown') { e.preventDefault(); state.sel = Math.min(state.sel + 1, state.results.length - 1); drawResults(); }
       else if (k === 'ArrowUp') { e.preventDefault(); state.sel = Math.max(state.sel - 1, 0); drawResults(); }
-      else if (k === 'Tab' && cur) { e.preventDefault(); toggleTray(cur); }
-      else if (k === 'Enter') { e.preventDefault(); startUse(state.tray.length ? state.tray : cur ? [cur] : [], ctrl ? 'copy' : 'paste'); }
+      // Enter/Tab act on the results for what is typed now, even if the debounce hasn't fired yet.
+      else if (k === 'Tab') { e.preventDefault(); flushSearch().then(() => { const p = state.results[state.sel]; if (p) toggleTray(p); }); }
+      else if (k === 'Enter') {
+        e.preventDefault();
+        flushSearch().then(() => { const p = state.results[state.sel]; startUse(state.tray.length ? state.tray : p ? [p] : [], ctrl ? 'copy' : 'paste'); });
+      }
       else if (ctrl && k.toLowerCase() === 'e' && cur) { e.preventDefault(); openEditor(cur); }
-      else if (ctrl && k.toLowerCase() === 'n') { e.preventDefault(); openEditor(null, ''); }
+      else if ((ctrl || e.altKey) && e.code === 'KeyN' || (ctrl && k.toLowerCase() === 'n')) { e.preventDefault(); openEditor(null, ''); }
       else if (ctrl && k === ',') { e.preventDefault(); openSettings(); }
       else if (k === 'Escape') { e.preventDefault(); if ($('#q').value) { $('#q').value = ''; runSearch(); } else pd.hide(); }
     } else if (state.view === 'fill') {
@@ -349,6 +409,7 @@ function bind() {
   });
 
   $('#results').addEventListener('click', (e) => {
+    if (e.target.dataset.edit !== undefined) return openEditor(state.results[+e.target.dataset.edit]);
     const li = e.target.closest('li[data-i]');
     if (!li) return;
     const p = state.results[+li.dataset.i];
@@ -411,6 +472,9 @@ function bind() {
   $('#s-import').addEventListener('click', async () => { const n = await pd.importData(); if (n !== null) toast(`Imported ${n} prompt${n === 1 ? '' : 's'}`); });
   $('#s-export').addEventListener('click', async () => { const f = await pd.exportData(); if (f) toast('Exported'); });
 
+  // Another tab (web) changed the data: refresh what is on screen without leaving the current view.
+  pd.onExternalChange?.(() => { if (state.view === 'search') runSearch(); else if (state.view === 'settings') drawSlotValues(); });
+
   pd.onShown(() => {
     if (state.view !== 'edit') { show('search'); $('#q').select(); }
     $('#q').focus();
@@ -426,4 +490,5 @@ function bind() {
   bind();
   runSearch();
   if (!state.settings.tourDone) showTour(0);
+  window.__pdReady = true;
 })();

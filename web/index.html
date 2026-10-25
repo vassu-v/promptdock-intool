@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PromptDock</title>
+<meta name="description" content="A private prompt library for AI chats. Search, fill in the blanks, copy. Stays in your browser.">
+<link rel="icon" href="../build/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../src/renderer/styles.css">
+<link rel="stylesheet" href="web.css">
+<script src="vendor/sql-wasm.js"></script>
+<script type="module" src="main.js"></script>
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="./"><img src="../build/icon.svg" alt="" width="24" height="24">PromptDock</a>
+  <nav>
+    <a href="https://github.com/vassu-v/promptdock-intool/releases/latest">Desktop app</a>
+    <a href="https://github.com/vassu-v/promptdock-intool">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <p class="lede">Save your prompts. Find one, fill the blanks, copy. Stored only in this browser.</p>
+  <div id="storage-banner" class="banner" role="alert" hidden></div>
+  <div id="app" class="app-frame"><div class="loading" id="loading">Loading…</div></div>
+  <p class="foot">Clearing browser data deletes your prompts. Back them up in <b>Settings → Export</b>.</p>
+</main>
+<noscript><p class="banner">PromptDock needs JavaScript.</p></noscript>
+</body>
+</html>

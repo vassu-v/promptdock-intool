@@ -1,7 +1,7 @@
 {
   "name": "promptdock",
   "productName": "PromptDock",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A translucent, always-on-top prompt library: hotkey, search, fill-in slots, compose, paste.",
   "type": "module",
   "main": "src/main/main.js",
@@ -15,7 +15,9 @@
     "pack": "electron-builder --win dir",
     "test:e2e": "node test/e2e/run.js",
     "icon": "electron scripts/make-icon.cjs",
-    "postinstall": "node scripts/ensure-electron.cjs"
+    "postinstall": "node scripts/ensure-electron.cjs",
+    "web": "node scripts/serve-web.mjs",
+    "test:web": "node test/web/run.js"
   },
   "dependencies": {
     "sql.js": "1.15.0"

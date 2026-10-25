@@ -10,6 +10,8 @@ npm run test:e2e   # drives the real app UI (59 checks) against a throwaway data
 npm run pack       # unpacked build in dist/win-unpacked
 npm run dist       # Windows installer + portable exe in dist/
 npm run icon       # re-render build/icon.png, tray.png, icon.ico from build/icon.svg
+npm run web        # serve the web build at http://127.0.0.1:5173/web/
+npm run test:web   # web build end-to-end (67 checks) in Chromium, incl. multi-tab + corrupt-data recovery
 ```
 
 ## Project layout
@@ -64,12 +66,21 @@ Data lives in `%APPDATA%\promptdock` (Windows), `~/Library/Application Support/p
 | `PD_SNAP=out.png` (+ `PD_SNAP_JS`, `PD_SNAP_DELAY`, `PD_SNAP_WAIT`, `PD_SNAP_BUBBLE`) | screenshot the panel/bubble after launch, then quit |
 | `PD_KEEP_OPEN=1` | don't hide the panel on blur |
 
-## Becoming a web app or extension later
+## Web build (`web/`)
 
-`src/core` has no Electron or Node dependencies, and `sql.js` runs in browsers. A web version needs
-(1) the renderer plus a small `window.pd` shim that calls `src/core` directly instead of over IPC,
-(2) `PromptStore` persisting its bytes to IndexedDB, and (3) dropping the desktop-only parts:
-hotkey, auto-paste and bubble. A browser extension is the same shim plus a popup.
+Live at **https://vassu-v.github.io/promptdock-intool/**, served by GitHub Pages straight from `main`
+(repo root; `index.html` redirects to `web/`, `.nojekyll` serves files as-is). There's no build step.
+
+| Piece | How |
+|---|---|
+| UI | `web/main.js` fetches the **same panel markup** from `src/renderer/index.html` and runs the **same** `src/renderer/app.js`; `web/web.css` only frames the page and hides desktop-only settings |
+| API | `web/pd-web.js` implements `window.pd` (the API Electron serves over IPC) on top of `src/core` |
+| Storage | `web/storage.js`: the SQLite bytes live in IndexedDB as one `{bytes, version}` record. Every change runs under a cross-tab **Web Lock**, re-reads the stored version first (so a stale tab reloads before writing, and no edit is lost), and saves atomically in one transaction. Other tabs are told via `BroadcastChannel` and re-check on focus. It asks for persistent storage, falls back to memory with a warning in private modes, and quarantines unreadable data (`corrupt-<time>` key) before starting fresh |
+| Copy | `navigator.clipboard` with a timeout, then `execCommand` fallback, then a "Ready to copy" box with a Copy button |
+| Semantic search | `web/semantic-worker.js` runs transformers.js (pinned `@4.3.1` from jsDelivr) in a Web Worker; the model is cached by the browser; embeddings are stored in the same SQLite file |
+| Vendored | `web/vendor/sql-wasm.{js,wasm}` (sql.js 1.15.0, MIT) |
+
+Not in the browser: global hotkey, auto-paste into other apps, bubble, tray. Next: PWA install and a browser extension (same `window.pd` shim plus a popup).
 
 ## Brand
 
@@ -77,6 +88,10 @@ The mark is a **P** whose bowl holds a `>` prompt chevron, followed by a `_` cur
 waiting for input. Gradient `#4F46E5 → #7C3AED → #C026D3`. Edit `build/icon.svg`, then `npm run icon`.
 
 ## Changelog
+
+- **0.4.0**: web version (GitHub Pages): IndexedDB storage with cross-tab locking, live sync and corrupt-data recovery;
+  in-browser semantic search; copy fallback box; minimal page. Fix (desktop too): pressing Enter right after typing used
+  the previous top result. Edit button on every result row (touch-friendly).
 
 - **0.3.0**: macOS/Linux friendliness: ⌘/Ctrl-aware labels everywhere, a "Copied ✓ press ⌘V/Ctrl+V"
   flow where auto-paste isn't available, menu-bar icon size, no Dock icon, panel over fullscreen apps,

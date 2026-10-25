@@ -17,6 +17,7 @@ your IDE, wherever your cursor is.
 
 <img src="docs/panel.png" width="620" alt="The PromptDock panel">
 
+[**🌐 Open in your browser**](https://vassu-v.github.io/promptdock-intool/) ·
 [**⬇ Download for Windows**](https://github.com/vassu-v/promptdock-intool/releases/latest) ·
 [Quick start](#-quick-start) ·
 [How to use it](#-how-to-use-it) ·
@@ -51,7 +52,20 @@ PromptDock keeps those prompts in a tiny translucent panel that floats above eve
 ## 🚀 Quick start
 
 <details open>
-<summary><b>🪟 Windows: installer (easiest)</b></summary>
+<summary><b>🌐 In the browser: nothing to install</b></summary>
+
+Open **[vassu-v.github.io/promptdock-intool](https://vassu-v.github.io/promptdock-intool/)** on any computer or phone.
+
+- Your prompts are saved **in that browser only**. No account, nothing uploaded.
+- Pick a prompt and it's **copied**; paste it with `Ctrl+V` / `⌘V`.
+- Shortcuts: `/` search, `Alt+N` new, `Ctrl+E` edit, `Ctrl+,` settings.
+- Clearing your browser data deletes your prompts, so use **Settings → Export JSON** now and then.
+- Want a global hotkey and auto-paste into any app? Use the desktop version below.
+
+</details>
+
+<details>
+<summary><b>🪟 Windows: desktop installer (hotkey + auto-paste)</b></summary>
 
 1. Grab **`PromptDock-Setup-x.y.z.exe`** from the [latest release](https://github.com/vassu-v/promptdock-intool/releases/latest).
    Want zero install? Take **`PromptDock-Portable-x.y.z.exe`** instead.
@@ -209,7 +223,8 @@ More answers in the **[User Guide](docs/USER_GUIDE.md#9-troubleshooting)**.
 - [ ] Auto-paste on macOS (needs a Mac tester 👀) and Linux (X11)
 - [ ] macOS `.dmg` and Linux AppImage builds
 - [ ] Shareable prompt packs for the team
-- [ ] Browser-extension version
+- [x] Web version (GitHub Pages)
+- [ ] Installable web app (PWA) and browser extension
 
 ## 🤝 Feedback
 
