@@ -3,7 +3,7 @@
 import { PromptStore } from '../src/core/store.js';
 import { search } from '../src/core/search.js';
 import { render } from '../src/core/compose.js';
-import { SEED_PROMPTS } from '../src/main/seed.js';
+import { seedLibrary } from '../src/main/seed.js';
 import { openStorage } from './storage.js';
 import { createSemantic } from './semantic.js';
 
@@ -154,7 +154,7 @@ export async function createWebPd(SQL, notices) {
   await loadFrom(await storage.read());
   await mutate((st) => {
     if (!st.settings().seeded) {
-      if (!st.list().length) for (const p of SEED_PROMPTS) st.create(p);
+      if (!st.list().length) seedLibrary(st);
       st.setSettings({ seeded: true });
     }
   });
@@ -192,14 +192,19 @@ export async function createWebPd(SQL, notices) {
     settings: async () => settings(),
     setSettings: async (patch) => { await mutate((st) => st.setSettings(patch)); return settings(); },
 
-    async use({ ids, values = {}, mode }) {
+    recipes: async () => store.recipes(),
+    saveRecipe: (r) => mutate((st) => st.saveRecipe(r)),
+    removeRecipe: (id) => mutate((st) => st.removeRecipe(id)),
+
+    async use({ ids, values = {}, mode, text: compiled, recipeId }) {
       const prompts = ids.map((id) => store.get(id)).filter(Boolean);
-      const text = render(prompts, values, store.settings().separator);
+      const text = typeof compiled === 'string' ? compiled : render(prompts, values, store.settings().separator);
       lastText = text;
       const copied = await copyText(text); // starts inside the key/click event, before any other await
       const kept = Object.fromEntries(Object.entries(values).filter(([, v]) => v));
       await mutate((st) => {
         st.markUsed(ids);
+        if (recipeId) st.markRecipeUsed(recipeId);
         if (Object.keys(kept).length) st.setSlotValues(kept);
       });
       return { text, pasted: false, copied, mode };

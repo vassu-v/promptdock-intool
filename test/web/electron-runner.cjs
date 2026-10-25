@@ -142,7 +142,7 @@ async function run() {
     check('found stored bytes to corrupt', n > 0, `${n} binary values`);
     await reload(A);
     const t = await titles(A);
-    check('corrupt data falls back to 6 seeds', t.length === 6, t);
+    check('corrupt data falls back to 9 seeds', t.length === 9, t);
     const banner = await js(A, `(() => { const b = document.querySelector('#storage-banner');
       return b ? { shown: !b.hidden && b.offsetParent !== null && getComputedStyle(b).visibility !== 'hidden', text: b.textContent } : null; })()`);
     check('storage warning banner shown', banner && banner.shown && banner.text.trim(), JSON.stringify(banner));

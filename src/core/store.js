@@ -29,7 +29,16 @@ CREATE TABLE IF NOT EXISTS embeddings (
   hash TEXT NOT NULL,
   vec BLOB NOT NULL
 );
-PRAGMA user_version = 1;
+CREATE TABLE IF NOT EXISTS recipes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  items TEXT NOT NULL DEFAULT '[]',
+  format TEXT NOT NULL DEFAULT 'plain',
+  ordering TEXT NOT NULL DEFAULT 'role',
+  use_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `;
 
 export const DEFAULT_SETTINGS = {
@@ -43,6 +52,14 @@ export const DEFAULT_SETTINGS = {
   tourDone: false,
 };
 
+/** Block roles, in the order a compiled prompt presents them. */
+export const ROLES = ['role', 'context', 'task', 'constraints', 'format', 'examples'];
+const cleanRole = (r) => (ROLES.includes(r) ? r : 'task');
+
+function rowToRecipe(r) {
+  return { id: r.id, name: r.name, items: JSON.parse(r.items || '[]'), format: r.format, ordering: r.ordering, useCount: r.use_count, updatedAt: r.updated_at };
+}
+
 const now = () => new Date().toISOString();
 
 function rowToPrompt(r) {
@@ -51,6 +68,7 @@ function rowToPrompt(r) {
     title: r.title,
     body: r.body,
     tags: JSON.parse(r.tags || '[]'),
+    role: ROLES.includes(r.role) ? r.role : 'task',
     pinned: !!r.pinned,
     useCount: r.use_count,
     lastUsed: r.last_used,
@@ -70,6 +88,11 @@ export class PromptStore {
     this.db = bytes ? new SQL.Database(bytes) : new SQL.Database();
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec(SCHEMA);
+    // v2: block role per prompt (older files get 'task').
+    if (!this._all('PRAGMA table_info(prompts)').some((c) => c.name === 'role')) {
+      this.db.exec("ALTER TABLE prompts ADD COLUMN role TEXT NOT NULL DEFAULT 'task'");
+    }
+    this.db.exec('PRAGMA user_version = 2;');
     this._persist = persist;
   }
 
@@ -100,13 +123,13 @@ export class PromptStore {
     return r ? rowToPrompt(r) : null;
   }
 
-  create({ title, body, tags = [], pinned = false }, { save = true } = {}) {
+  create({ title, body, tags = [], pinned = false, role = 'task' }, { save = true } = {}) {
     if (!String(body ?? '').trim()) throw new Error('Prompt body is empty');
     const t = now();
     const finalTitle = String(title ?? '').trim() || String(body).trim().split('\n')[0].slice(0, 60);
     this._run(
-      'INSERT INTO prompts (title, body, tags, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [finalTitle, body, JSON.stringify(cleanTags(tags)), pinned ? 1 : 0, t, t],
+      'INSERT INTO prompts (title, body, tags, pinned, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [finalTitle, body, JSON.stringify(cleanTags(tags)), pinned ? 1 : 0, cleanRole(role), t, t],
     );
     const id = this._all('SELECT last_insert_rowid() AS id')[0].id;
     if (save) this.save();
@@ -120,8 +143,8 @@ export class PromptStore {
     if (patch.tags !== undefined) next.tags = cleanTags(patch.tags);
     if (!String(next.body ?? '').trim()) throw new Error('Prompt body is empty');
     this._run(
-      'UPDATE prompts SET title = ?, body = ?, tags = ?, pinned = ?, updated_at = ? WHERE id = ?',
-      [String(next.title).trim() || cur.title, next.body, JSON.stringify(next.tags), next.pinned ? 1 : 0, now(), id],
+      'UPDATE prompts SET title = ?, body = ?, tags = ?, pinned = ?, role = ?, updated_at = ? WHERE id = ?',
+      [String(next.title).trim() || cur.title, next.body, JSON.stringify(next.tags), next.pinned ? 1 : 0, cleanRole(next.role), now(), id],
     );
     this.save();
     return this.get(id);
@@ -142,6 +165,43 @@ export class PromptStore {
     const counts = new Map();
     for (const p of this.list()) for (const t of p.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     return [...counts].sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, count }));
+  }
+
+  // ---- recipes: saved compile stacks. Items reference prompts by id, so edits flow through. ----
+  recipes() {
+    return this._all('SELECT * FROM recipes ORDER BY use_count DESC, updated_at DESC').map(rowToRecipe);
+  }
+
+  getRecipe(id) {
+    const r = this._all('SELECT * FROM recipes WHERE id = ?', [id])[0];
+    return r ? rowToRecipe(r) : null;
+  }
+
+  saveRecipe({ id, name, items = [], format = 'plain', ordering = 'role' }, { save = true } = {}) {
+    name = String(name ?? '').trim();
+    if (!name) throw new Error('Give the recipe a name');
+    const clean = (Array.isArray(items) ? items : []).filter((it) => Number.isInteger(it?.id)).map((it) => ({ id: it.id, on: it.on !== false }));
+    if (!clean.length) throw new Error('A recipe needs at least one prompt');
+    const fmt = ['plain', 'markdown', 'xml'].includes(format) ? format : 'plain';
+    const ord = ordering === 'stack' ? 'stack' : 'role';
+    const t = now();
+    if (id && this.getRecipe(id)) {
+      this._run('UPDATE recipes SET name = ?, items = ?, format = ?, ordering = ?, updated_at = ? WHERE id = ?', [name, JSON.stringify(clean), fmt, ord, t, id]);
+    } else {
+      this._run('INSERT INTO recipes (name, items, format, ordering, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [name, JSON.stringify(clean), fmt, ord, t, t]);
+      id = this._all('SELECT last_insert_rowid() AS id')[0].id;
+    }
+    if (save) this.save();
+    return this.getRecipe(id);
+  }
+
+  removeRecipe(id) {
+    this._run('DELETE FROM recipes WHERE id = ?', [id]);
+    this.save();
+  }
+
+  markRecipeUsed(id) {
+    this._run('UPDATE recipes SET use_count = use_count + 1 WHERE id = ?', [id]);
   }
 
   // ---- remembered slot values (local to this machine/user, editable) ----
@@ -192,21 +252,37 @@ export class PromptStore {
 
   // ---- import / export ----
   exportJSON() {
-    return { app: 'PromptDock', version: 1, exportedAt: now(), prompts: this.list().map(({ id, useCount, lastUsed, ...p }) => p), slotValues: this.slotValues() };
+    const list = this.list();
+    const index = new Map(list.map((p, i) => [p.id, i]));
+    const recipes = this.recipes().map((r) => ({ name: r.name, format: r.format, ordering: r.ordering,
+      items: r.items.filter((it) => index.has(it.id)).map((it) => ({ prompt: index.get(it.id), on: it.on })) }));
+    return { app: 'PromptDock', version: 2, exportedAt: now(), prompts: list.map(({ id, useCount, lastUsed, ...p }) => p), recipes, slotValues: this.slotValues() };
   }
 
   /** All-or-nothing: one SQL transaction and a single save, however many prompts. */
   importJSON(data) {
-    const existing = new Set(this.list().map((p) => `${p.title}\u0000${p.body}`));
+    const key = (p) => `${p.title}\u0000${p.body}`;
+    const existing = new Map(this.list().map((p) => [key(p), p.id]));
+    const idAt = []; // export index -> local prompt id, for recipes
     let added = 0;
     this.db.exec('BEGIN');
     try {
       for (const p of data?.prompts ?? []) {
-        if (!p?.body || existing.has(`${p.title}\u0000${p.body}`)) continue;
+        if (!p?.body) { idAt.push(null); continue; }
+        if (existing.has(key(p))) { idAt.push(existing.get(key(p))); continue; }
         const tags = Array.isArray(p.tags) ? p.tags.map(String) : p.tags; // tolerate numbers in hand-edited files
-        this.create({ ...p, body: String(p.body), title: p.title == null ? '' : String(p.title), tags }, { save: false });
-        existing.add(`${p.title}\u0000${p.body}`);
+        const made = this.create({ ...p, body: String(p.body), title: p.title == null ? '' : String(p.title), tags }, { save: false });
+        existing.set(key(p), made.id);
+        idAt.push(made.id);
         added++;
+      }
+      const haveRecipe = new Set(this.recipes().map((r) => r.name));
+      for (const r of Array.isArray(data?.recipes) ? data.recipes : []) {
+        if (!r?.name || haveRecipe.has(String(r.name))) continue;
+        const items = (Array.isArray(r.items) ? r.items : []).map((it) => ({ id: idAt[it?.prompt], on: it?.on !== false })).filter((it) => Number.isInteger(it.id));
+        if (!items.length) continue;
+        this.saveRecipe({ name: String(r.name), items, format: r.format, ordering: r.ordering }, { save: false });
+        haveRecipe.add(String(r.name));
       }
       for (const [name, value] of Object.entries(data?.slotValues ?? {})) {
         if (value === null || value === '') continue;

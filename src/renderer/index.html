@@ -11,16 +11,17 @@
   <!-- SEARCH -->
   <section id="view-search" class="view">
     <div class="searchbar">
-      <span class="logo"><svg class="mark" viewBox="0 0 256 256" aria-hidden="true"><g transform="translate(6 0)"><path d="M84 192 V68 h50 a42 42 0 0 1 0 84 h-50" fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path d="M120 94 l16 16 -16 16" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><rect class="cursor" x="146" y="176" width="54" height="18" rx="9" fill="currentColor"/></g></svg></span>
+      <span class="logo" aria-hidden="true">P<i>_</i></span>
       <input id="q" placeholder="Search prompts…  (#tag to filter)" autocomplete="off" spellcheck="false">
       <span id="sem-badge" class="badge" hidden>semantic</span>
+      <button id="btn-compile" title="Compile prompts into one (Ctrl+K)">Compile<span id="compile-count"></span></button>
       <button class="icon" id="btn-new" title="New prompt (Ctrl+N)">＋</button>
       <button class="icon" id="btn-settings" title="Settings (Ctrl+,)">⚙</button>
     </div>
     <div id="tray" class="tray" hidden></div>
     <ul id="results" class="results"></ul>
     <footer class="hints">
-      <span><kbd>↑↓</kbd> move</span><span><kbd>Enter</kbd> <span class="lbl-use">use</span></span><span><kbd>Tab</kbd> add to compose</span>
+      <span><kbd>↑↓</kbd> move</span><span><kbd>Enter</kbd> <span class="lbl-use">use</span></span><span><kbd>Tab</kbd> stack</span><span><kbd>Ctrl+K</kbd> compile</span>
       <span class="only-paste"><kbd>Ctrl+Enter</kbd> copy only</span><span><kbd data-newkey>Ctrl+N</kbd> new</span><span><kbd>Ctrl+E</kbd> edit</span><span><kbd>Esc</kbd> <span class="lbl-esc">close</span></span>
     </footer>
   </section>
@@ -39,7 +40,11 @@
       <label class="pin"><input type="checkbox" id="e-pinned"> Pinned</label></header>
     <div class="scroll form">
       <input id="e-title" placeholder="Title (optional — first line is used)">
-      <input id="e-tags" placeholder="Tags, comma separated">
+      <div class="row two">
+        <input id="e-tags" placeholder="Tags, comma separated">
+        <label class="inline">Role when compiled
+          <select id="e-role"><option value="role">role (who the AI is)</option><option value="context">context</option><option value="task">task</option><option value="constraints">constraints</option><option value="format">output format</option><option value="examples">examples</option></select></label>
+      </div>
       <textarea id="e-body" placeholder="Prompt text. Add slots like {{file}} or {{tone:friendly}}"></textarea>
       <div class="row">
         <button type="button" id="e-slot">Make selection a {{slot}}</button>
@@ -50,6 +55,36 @@
       <button id="e-delete" class="danger" hidden>Delete</button>
       <span class="grow"></span>
       <button data-back>Cancel</button><button id="e-save" class="primary">Save <kbd>Ctrl+S</kbd></button>
+    </footer>
+  </section>
+
+  <!-- COMPILE -->
+  <section id="view-compile" class="view" hidden>
+    <header class="vhead"><button class="icon" data-back>←</button><h2>Compile</h2>
+      <select id="c-recipe" title="Load a saved recipe"></select></header>
+    <div class="compile">
+      <div class="c-left">
+        <div class="c-add">
+          <input id="c-add" placeholder="Add a prompt, or #tag to add the whole tag" autocomplete="off" spellcheck="false">
+          <ul id="c-suggest" class="c-suggest" hidden></ul>
+        </div>
+        <div id="c-tags" class="c-tags"></div>
+        <ol id="c-stack" class="c-stack"></ol>
+        <div id="c-slots" class="c-slots"></div>
+      </div>
+      <div class="c-right">
+        <div class="c-opts">
+          <span class="seg" id="c-format" role="radiogroup" aria-label="Output format"><button data-v="plain">plain</button><button data-v="markdown">markdown</button><button data-v="xml">xml tags</button></span>
+          <span class="seg" id="c-order" role="radiogroup" aria-label="Order"><button data-v="role">by role</button><button data-v="stack">as stacked</button></span>
+        </div>
+        <pre id="c-out" class="c-out" tabindex="0"></pre>
+        <div id="c-notes" class="c-notes"></div>
+      </div>
+    </div>
+    <footer class="actions">
+      <input id="c-name" placeholder="Recipe name"><button id="c-save">Save recipe</button><button id="c-del" class="danger" hidden>Delete recipe</button>
+      <span class="grow"></span><span id="c-stats" class="muted"></span>
+      <button id="c-copy" class="primary">Copy <kbd>Ctrl+Enter</kbd></button>
     </footer>
   </section>
 

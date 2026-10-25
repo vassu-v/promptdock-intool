@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PromptDock</title>
-<meta name="description" content="A private prompt library for AI chats. Search, fill in the blanks, copy. Stays in your browser.">
+<meta name="description" content="A private prompt library. Stack prompts, compile them into one, copy. Stays in your browser.">
 <link rel="icon" href="../build/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../src/renderer/styles.css">
 <link rel="stylesheet" href="web.css">
@@ -13,19 +13,16 @@
 </head>
 <body>
 <header class="site">
-  <a class="brand" href="./"><img src="../build/icon.svg" alt="" width="24" height="24">PromptDock</a>
+  <a class="brand" href="./">P<i>_</i> promptdock</a>
+  <span class="tagline">prompt library + compiler · stored in this browser only</span>
   <nav>
-    <a href="https://github.com/vassu-v/promptdock-intool/releases/latest">Desktop app</a>
-    <a href="https://github.com/vassu-v/promptdock-intool">GitHub</a>
+    <a href="https://github.com/vassu-v/promptdock-intool/releases/latest">desktop app</a>
+    <a href="https://github.com/vassu-v/promptdock-intool">source</a>
   </nav>
 </header>
-
-<main>
-  <p class="lede">Save your prompts. Find one, fill the blanks, copy. Stored only in this browser.</p>
-  <div id="storage-banner" class="banner" role="alert" hidden></div>
-  <div id="app" class="app-frame"><div class="loading" id="loading">Loading…</div></div>
-  <p class="foot">Clearing browser data deletes your prompts. Back them up in <b>Settings → Export</b>.</p>
-</main>
+<div id="storage-banner" class="banner" role="alert" hidden></div>
+<main id="app" class="app-frame"><div class="loading" id="loading">loading…</div></main>
+<footer class="site-foot">Clearing browser data deletes your prompts. Back up in Settings → Export JSON.</footer>
 <noscript><p class="banner">PromptDock needs JavaScript.</p></noscript>
 </body>
 </html>

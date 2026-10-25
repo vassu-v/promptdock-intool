@@ -7,7 +7,7 @@ import initSqlJs from 'sql.js';
 import { PromptStore } from '../core/store.js';
 import { search } from '../core/search.js';
 import { render } from '../core/compose.js';
-import { SEED_PROMPTS } from './seed.js';
+import { seedLibrary } from './seed.js';
 import * as semantic from './semantic.js';
 import * as paste from './paste.js';
 
@@ -67,7 +67,7 @@ async function openStore() {
   const SQL = await initSqlJs({ locateFile: (f) => require.resolve(`sql.js/dist/${f}`) });
   const exists = fs.existsSync(dbPath);
   store = new PromptStore(SQL, exists ? fs.readFileSync(dbPath) : null, persist);
-  if (!exists) for (const p of SEED_PROMPTS) store.create(p);
+  if (!exists) { seedLibrary(store); store.save(); }
   settings = store.settings();
   firstRun = !exists;
 }
@@ -274,9 +274,15 @@ function registerIpc() {
   handle('semantic:disable', async (opts) => { settings = store.setSettings({ semanticEnabled: false }); disableSemantic(opts); return true; });
 
   // Render the chosen prompts, copy, and (optionally) paste into the previous window.
-  handle('use', async ({ ids, values = {}, mode = 'paste' }) => {
+  handle('recipes:list', () => store.recipes());
+  handle('recipes:save', (r) => store.saveRecipe(r));
+  handle('recipes:remove', (id) => store.removeRecipe(id));
+
+  // `text` is a prompt the renderer already compiled; otherwise the prompts are joined here.
+  handle('use', async ({ ids, values = {}, mode = 'paste', text: compiled, recipeId }) => {
     const prompts = ids.map((id) => store.get(id)).filter(Boolean);
-    const text = render(prompts, values, settings.separator);
+    const text = typeof compiled === 'string' ? compiled : render(prompts, values, settings.separator);
+    if (recipeId) store.markRecipeUsed(recipeId);
     clipboard.writeText(text);
     lastText = text;
     store.markUsed(ids);

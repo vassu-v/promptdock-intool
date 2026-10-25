@@ -34,7 +34,7 @@
 
   await step('seed list', async () => {
     await search('');
-    check('6 seed prompts listed', titles().length === 6, titles());
+    check('9 seed prompts listed', titles().length === 9, titles());
     check('pinned first', titles()[0] === 'Code review', titles()[0]);
   });
 
@@ -142,6 +142,54 @@
     const t = (await pd.testLast()) ?? '';
     check('composed in order with blank line', t.startsWith('Write a concise') && t.includes('\n\nMake this layout'), t);
     check('tray cleared after use', $('#tray').hidden);
+  });
+
+  await step('compile', async () => {
+    await home();
+    await search('#review'); $('#q').focus(); await key('Tab');
+    await key('k', { code: 'KeyK', ctrlKey: true }); await wait(300);
+    check('Ctrl+K opens the compiler with the stack', visible('compile') && $('#c-stack li[data-i]').length === 1, $('#c-stack li').length);
+    await type('#c-add', '#persona'); await key('Enter'); await wait(200);
+    await type('#c-add', 'scope tight'); await key('Enter'); await wait(200);
+    check('adds by #tag and by title', $('#c-stack li[data-i] .t').map((e) => e.textContent).join('|') === 'Code review|Senior engineer|Keep the scope tight', $('#c-stack li .t').map((e) => e.textContent));
+    let out = $('#c-out').textContent;
+    check('orders by role (role first)', out.startsWith('You are a senior') && out.indexOf('Review the following') < out.indexOf('Do not change public'), out);
+    check('shared blank shown once', $('[data-cslot]').length === 1 && $('[data-cslot]').dataset.cslot === 'language', $('[data-cslot]').map((e) => e.dataset.cslot));
+    await type('[data-cslot=language]', 'Rust');
+    out = $('#c-out').textContent;
+    check('blank fills every block', (out.match(/Rust/g) ?? []).length === 2 && !out.includes('{{language'), out);
+    $('#c-format button[data-v=xml]').click(); await wait();
+    check('xml format', $('#c-out').textContent.startsWith('<role>\nYou are a senior Rust'), $('#c-out').textContent.slice(0, 60));
+    $('#c-order button[data-v=stack]').click(); await wait();
+    check('stack order', $('#c-out').textContent.startsWith('<task>'), $('#c-out').textContent.slice(0, 30));
+    $('#c-order button[data-v=role]').click(); await wait();
+    $('#c-stack input[data-on="2"]').click(); await wait();
+    check('disabled block left out', !$('#c-out').textContent.includes('Do not change public'));
+    $('#c-stack input[data-on="2"]').click(); await wait();
+    $('#c-stack li[data-i="2"]').focus(); await key('ArrowUp', { altKey: true });
+    check('Alt+Up reorders', $('#c-stack li[data-i] .t')[1].textContent === 'Keep the scope tight');
+    await key('Enter', { ctrlKey: true }); await wait(400);
+    const t = (await pd.testLast()) ?? '';
+    check('Ctrl+Enter copies the compiled text', t === $('#c-out').textContent && t.includes('<constraints>'), t.slice(0, 80));
+    check('blank value remembered', (await pd.slotValues()).language === 'Rust');
+    $('#copybox-close')?.click(); await wait();
+    $('#c-name').value = 'Rust review';
+    await key('s', { code: 'KeyS', ctrlKey: true }); await wait(300);
+    const rs = await pd.recipes();
+    const r = rs.find((x) => x.name === 'Rust review');
+    check('recipe saved', r && r.items.length === 3 && r.format === 'xml', JSON.stringify(rs));
+    await home();
+    await search('rust rev'); $('#q').focus();
+    const hit = $('#results li[data-r]');
+    check('recipe found in search', hit?.querySelector('.t').textContent === 'Rust review', $('#results').textContent);
+    // Recipes reference prompts, so editing a block shows up next time the recipe runs.
+    const sr = (await pd.list()).find((x) => x.title === 'Senior engineer');
+    await pd.update(sr.id, { body: 'You are a principal {{language}} engineer.' });
+    hit.click(); await wait(400);
+    check('recipe opens with the edited block', visible('compile') && $('#c-out').textContent.includes('principal Rust engineer'), $('#c-out').textContent.slice(0, 80));
+    $('#c-del').click(); $('#c-del').click(); await wait(300);
+    check('recipe deleted', !(await pd.recipes()).some((x) => x.name === 'Rust review'));
+    await home();
   });
 
   await step('edit existing', async () => {

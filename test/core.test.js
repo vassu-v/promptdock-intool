@@ -102,3 +102,76 @@ test('import is all-or-nothing and saves once', () => {
   assert.throws(() => st.importJSON({ prompts: [{ title: 'C', body: 'c' }, bad] }));
   assert.ok(!st.list().some((p) => p.title === 'C'), 'failed import leaves nothing behind');
 });
+
+// ---- compile ----
+import { compile } from '../src/core/compile.js';
+
+const blk = (id, role, body, title = `p${id}`) => ({ prompt: { id, role, body, title } });
+
+test('compile orders by role, or keeps stack order', () => {
+  const st = [blk(1, 'format', 'Answer as a table.'), blk(2, 'role', 'You are a senior {{lang}} dev.'), blk(3, 'task', 'Review {{file}}.')];
+  assert.equal(compile(st).text, 'You are a senior {{lang}} dev.\n\nReview {{file}}.\n\nAnswer as a table.');
+  assert.equal(compile(st, { ordering: 'stack' }).text.split('\n\n')[0], 'Answer as a table.');
+});
+
+test('compile merges slots across blocks and fills them once', () => {
+  const st = [blk(1, 'role', 'You know {{lang:Go}}.'), blk(2, 'task', 'Port this to {{lang}} in {{file}}.')];
+  const r = compile(st, { values: { file: 'a.go' } });
+  assert.deepEqual(r.slots.map((s) => s.name), ['lang', 'file']);
+  assert.equal(r.text, 'You know Go.\n\nPort this to {{lang}} in a.go.'); // default only where written inline
+  assert.equal(compile(st, { values: { lang: 'Rust', file: 'x' } }).text, 'You know Rust.\n\nPort this to Rust in x.');
+});
+
+test('compile drops repeated sentences and skips disabled blocks', () => {
+  const st = [blk(1, 'task', 'Fix the bug. Be concise and direct.'), { ...blk(2, 'task', 'Never shown.'), on: false },
+    blk(3, 'constraints', 'be concise and direct!\nKeep the public API.')];
+  const r = compile(st);
+  assert.equal(r.text, 'Fix the bug. Be concise and direct.\n\nKeep the public API.');
+  assert.equal(r.dropped.length, 1);
+  assert.equal(r.dropped[0].from, 'p3');
+});
+
+test('compile flags simple contradictions', () => {
+  const r = compile([blk(1, 'task', 'Be concise.'), blk(2, 'constraints', 'Give a detailed answer.')]);
+  assert.equal(r.conflicts.length, 1);
+  assert.match(r.conflicts[0], /concise.*detailed/);
+  assert.equal(compile([blk(1, 'task', 'Be concise.')]).conflicts.length, 0);
+});
+
+test('compile renders markdown sections and xml tags, grouping same roles', () => {
+  const st = [blk(1, 'context', 'Repo is a CLI.'), blk(2, 'task', 'Add a flag.'), blk(3, 'task', 'Update the docs.')];
+  assert.equal(compile(st, { format: 'markdown' }).text, '## Context\n\nRepo is a CLI.\n\n## Task\n\nAdd a flag.\n\nUpdate the docs.');
+  assert.equal(compile(st, { format: 'xml' }).text, '<context>\nRepo is a CLI.\n</context>\n\n<task>\nAdd a flag.\n\nUpdate the docs.\n</task>');
+});
+
+test('store: roles, recipes, migration and export/import round trip', () => {
+  // An old v1 file without the role column still opens.
+  const old = new SQL.Database();
+  old.exec("CREATE TABLE prompts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '[]', pinned INTEGER NOT NULL DEFAULT 0, use_count INTEGER NOT NULL DEFAULT 0, last_used TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL); INSERT INTO prompts (title, body, created_at, updated_at) VALUES ('Old', 'old body', 'x', 'x');");
+  const s = new PromptStore(SQL, old.export());
+  assert.equal(s.list()[0].role, 'task');
+
+  const a = s.create({ title: 'Senior', body: 'You are senior.', role: 'role' });
+  const b = s.create({ title: 'Bogus', body: 'b', role: 'nonsense' });
+  assert.equal(a.role, 'role');
+  assert.equal(b.role, 'task');
+  assert.equal(s.update(b.id, { role: 'format' }).role, 'format');
+  assert.throws(() => s.saveRecipe({ name: '', items: [{ id: a.id }] }), /name/);
+  assert.throws(() => s.saveRecipe({ name: 'x', items: [] }), /at least one/);
+  const r = s.saveRecipe({ name: 'PR review', items: [{ id: b.id }, { id: a.id, on: false }], format: 'xml' });
+  assert.deepEqual(r.items, [{ id: b.id, on: true }, { id: a.id, on: false }]);
+  assert.equal(s.saveRecipe({ id: r.id, name: 'PR review 2', items: r.items }).name, 'PR review 2');
+  assert.equal(s.recipes().length, 1);
+
+  const fresh = new PromptStore(SQL, null);
+  fresh.create({ title: 'Senior', body: 'You are senior.' }); // already there: reused, not duplicated
+  assert.equal(fresh.importJSON(JSON.parse(JSON.stringify(s.exportJSON()))), 2);
+  const [imp] = fresh.recipes();
+  assert.equal(imp.name, 'PR review 2');
+  assert.deepEqual(imp.items.map((it) => fresh.get(it.id).title), ['Bogus', 'Senior']);
+  assert.equal(imp.items[1].on, false);
+  assert.equal(fresh.importJSON(s.exportJSON()), 0);
+  assert.equal(fresh.recipes().length, 1); // same-name recipe not duplicated
+  s.removeRecipe(r.id);
+  assert.equal(s.recipes().length, 0);
+});
