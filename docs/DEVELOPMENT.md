@@ -11,7 +11,7 @@ npm run pack       # unpacked build in dist/win-unpacked
 npm run dist       # Windows installer + portable exe in dist/
 npm run icon       # re-render build/icon.png, tray.png, icon.ico from build/icon.svg
 npm run web        # serve the web build at http://127.0.0.1:5173/web/
-npm run test:web   # web build end-to-end (67 checks) in Chromium, incl. multi-tab + corrupt-data recovery
+npm run test:web   # web build end-to-end (70 checks) in Chromium: multi-tab sync, no lost edits (with and without Web Locks), corrupt-data recovery
 ```
 
 ## Project layout
@@ -75,7 +75,7 @@ Live at **https://vassu-v.github.io/promptdock-intool/**, served by GitHub Pages
 |---|---|
 | UI | `web/main.js` fetches the **same panel markup** from `src/renderer/index.html` and runs the **same** `src/renderer/app.js`; `web/web.css` only frames the page and hides desktop-only settings |
 | API | `web/pd-web.js` implements `window.pd` (the API Electron serves over IPC) on top of `src/core` |
-| Storage | `web/storage.js`: the SQLite bytes live in IndexedDB as one `{bytes, version}` record. Every change runs under a cross-tab **Web Lock**, re-reads the stored version first (so a stale tab reloads before writing, and no edit is lost), and saves atomically in one transaction. Other tabs are told via `BroadcastChannel` and re-check on focus. It asks for persistent storage, falls back to memory with a warning in private modes, and quarantines unreadable data (`corrupt-<time>` key) before starting fresh |
+| Storage | `web/storage.js`: the SQLite bytes live in IndexedDB as one `{bytes, version}` record. Every change runs under a cross-tab **Web Lock**, re-reads the stored version first, and saves with a compare-and-swap in one transaction, so a stale tab can never overwrite newer data, even in browsers without Web Locks (it reloads and retries). A change that throws reloads the saved state, so nothing half-applied is ever written later. Imports are all-or-nothing. Other tabs are told via `BroadcastChannel` and re-check on focus. It asks for persistent storage, falls back to memory with a warning in private modes, and quarantines unreadable data (`corrupt-<time>` key) before starting fresh |
 | Copy | `navigator.clipboard` with a timeout, then `execCommand` fallback, then a "Ready to copy" box with a Copy button |
 | Semantic search | `web/semantic-worker.js` runs transformers.js (pinned `@4.3.1` from jsDelivr) in a Web Worker; the model is cached by the browser; embeddings are stored in the same SQLite file |
 | Vendored | `web/vendor/sql-wasm.{js,wasm}` (sql.js 1.15.0, MIT) |

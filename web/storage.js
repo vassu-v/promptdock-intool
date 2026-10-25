@@ -48,24 +48,42 @@ export async function openStorage() {
       return { bytes: rec.bytes instanceof Uint8Array ? rec.bytes : new Uint8Array(rec.bytes), version: rec.version ?? 0 };
     },
 
+    /**
+     * Compare-and-swap: saves only if the stored version is still `version - 1`, checked in the
+     * same transaction. So even without Web Locks a stale tab can never overwrite newer data;
+     * it gets a ConflictError and reloads instead.
+     */
     async write(bytes, version) {
       if (!idb) { memory = { bytes, version }; return; }
       const tx = idb.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put({ bytes, version, savedAt: Date.now() }, KEY);
+      const os = tx.objectStore(STORE);
+      let conflict = false;
+      os.get(KEY).onsuccess = (e) => {
+        const cur = e.target.result?.version ?? 0;
+        if (cur !== version - 1) { conflict = true; tx.abort(); return; }
+        os.put({ bytes, version, savedAt: Date.now() }, KEY);
+      };
       await new Promise((resolve, reject) => {
         tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error ?? new Error('Save was aborted (storage may be full)'));
+        tx.onerror = (e) => e.preventDefault?.();
+        tx.onabort = () => reject(conflict
+          ? Object.assign(new Error('Changed in another tab'), { name: 'ConflictError' })
+          : (tx.error ?? new Error('Save was aborted (storage may be full)')));
       });
       channel?.postMessage({ type: 'changed', version });
     },
 
-    /** Keep a copy of unreadable bytes so nothing is ever silently thrown away. */
+    /** Keep a copy of unreadable bytes so nothing is silently thrown away. Resolves to whether it was stored. */
     async quarantine(bytes) {
-      if (!idb || !bytes) return;
-      const tx = idb.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put({ bytes, savedAt: Date.now() }, `corrupt-${Date.now()}`);
-      await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
+      if (!idb || !bytes) return false;
+      try {
+        const tx = idb.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put({ bytes, savedAt: Date.now() }, `corrupt-${Date.now()}`);
+        return await new Promise((resolve) => {
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = tx.onabort = () => resolve(false);
+        });
+      } catch { return false; }
     },
 
     /** Run fn while holding the cross-tab write lock (where supported). */

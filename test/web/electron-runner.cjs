@@ -82,6 +82,36 @@ async function run() {
     }
   });
 
+  await step('no lost updates without Web Locks', async () => {
+    // Older Safari/Firefox have no navigator.locks; the compare-and-swap save must still protect edits.
+    for (const w of [A, B]) await js(w, "Object.defineProperty(navigator, 'locks', { value: undefined, configurable: true }); true");
+    await Promise.all([
+      js(A, "Promise.all([1,2,3].map((i) => pd.create({ title: 'NoLock A' + i, body: 'a' })))"),
+      js(B, "Promise.all([1,2,3].map((i) => pd.create({ title: 'NoLock B' + i, body: 'b' })))"),
+    ]);
+    await sleep(1500);
+    const t = await titles(A);
+    const got = t.filter((x) => x.startsWith('NoLock')).length;
+    check('all 6 concurrent edits survive without locks', got === 6, t.filter((x) => x.startsWith('NoLock')));
+  });
+
+  await step('stale save is refused', async () => {
+    const name = await js(A, `(async () => {
+      const { openStorage } = await import('/web/storage.js');
+      const s = await openStorage();
+      const r = await s.read();
+      try { await s.write(r.bytes, r.version); return 'saved over newer data'; } catch (e) { return e.name; }
+    })()`);
+    check('write with an old version raises ConflictError', name === 'ConflictError', name);
+  });
+
+  await step('messy import data is cleaned, not half-saved', async () => {
+    const before = (await titles(A)).length;
+    const res = await js(A, `pd.importData(JSON.stringify({ prompts: [{ title: 'Messy 1', body: 'x', tags: [1, 'a'] }, { title: 'Messy 2', body: 'y', tags: 'b, c' }] })).then((n) => n, (e) => e.message)`);
+    const t = await titles(A);
+    check('messy import adds both prompts atomically', res === 2 && t.length === before + 2, `${res} | ${t.length - before}`);
+  });
+
   collect = false; // errors are expected while recovering from corrupt data
   await step('corrupt data recovery', async () => {
     if (B) { B.destroy(); B = null; }

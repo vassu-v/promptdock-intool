@@ -89,3 +89,16 @@ test('slot names can use non-Latin scripts', () => {
   assert.deepEqual(parseSlots('नमस्ते {{नाम}} {{名前:太郎}}').map((s) => s.name), ['नाम', '名前']);
   assert.equal(fillSlots('Hi {{नाम}}', { 'नाम': 'Asha' }), 'Hi Asha');
 });
+
+test('import is all-or-nothing and saves once', () => {
+  let saves = 0;
+  const st = new PromptStore(SQL, null, () => saves++);
+  saves = 0;
+  const n = st.importJSON({ prompts: [{ title: 'A', body: 'a', tags: [1, 'x'] }, { title: 'B', body: 'b' }] });
+  assert.equal(n, 2);
+  assert.deepEqual(st.list().find((p) => p.title === 'A').tags, ['1', 'x']);
+  assert.equal(saves, 1, 'one save for the whole import');
+  const bad = { title: 'D', body: { toString() { throw new Error('unreadable'); } } };
+  assert.throws(() => st.importJSON({ prompts: [{ title: 'C', body: 'c' }, bad] }));
+  assert.ok(!st.list().some((p) => p.title === 'C'), 'failed import leaves nothing behind');
+});

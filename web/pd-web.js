@@ -77,47 +77,77 @@ export async function createWebPd(SQL, notices) {
 
   const capture = (bytes) => { pendingBytes = bytes; };
 
+  // Set when damaged data could not be backed up: we then never overwrite it, so it can still be recovered.
+  let savesDisabled = false;
+
   async function loadFrom(rec) {
     try {
       store = new PromptStore(SQL, rec.bytes, capture);
       store.list(); // touch the data so an unreadable file fails here, not later
       version = rec.version;
     } catch {
-      await storage.quarantine(rec.bytes);
-      notices.push('Your saved prompts could not be read, so PromptDock started fresh. A copy of the damaged data was kept in browser storage.');
+      const kept = await storage.quarantine(rec.bytes);
       store = new PromptStore(SQL, null, capture);
       version = rec.version; // the next save replaces the damaged record
+      if (kept) {
+        notices.push('Your saved prompts could not be read, so PromptDock started fresh. A copy of the damaged data was kept in browser storage.');
+      } else {
+        savesDisabled = true;
+        notices.push('Your saved prompts could not be read, and no backup copy could be made, so nothing will be saved over them in this tab. Changes here last until you close it. Use Export JSON to keep them.');
+      }
     }
   }
 
-  /** Apply a change under the cross-tab lock, on the latest data, and save it atomically. */
-  async function mutate(fn) {
-    return storage.withLock(async () => {
-      const rec = await storage.read();
-      if (rec.version !== version) await loadFrom(rec);
-      pendingBytes = null;
-      const result = fn(store);
-      if (pendingBytes) {
+  // One change at a time in this tab (also when the browser has no Web Locks), plus the cross-tab lock.
+  let queue = Promise.resolve();
+  function serial(fn) {
+    const run = queue.then(() => storage.withLock(fn));
+    queue = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Apply a change on the latest saved data and save it atomically. If the change throws, or
+   * another tab saved first, the in-memory database is reloaded from storage so a half-applied
+   * or stale change can never be saved later.
+   */
+  function mutate(fn) {
+    return serial(async () => {
+      for (let attempt = 0; ; attempt++) {
+        const rec = await storage.read();
+        if (rec.version !== version) await loadFrom(rec);
+        pendingBytes = null;
+        let result;
         try {
-          await storage.write(pendingBytes, version + 1);
+          result = fn(store);
+        } catch (err) {
+          pendingBytes = null;
+          await loadFrom(await storage.read());
+          throw err;
+        }
+        const bytes = pendingBytes;
+        pendingBytes = null;
+        if (!bytes || savesDisabled) return result;
+        try {
+          await storage.write(bytes, version + 1);
           version += 1;
+          return result;
         } catch (err) {
           await loadFrom(await storage.read()); // stay consistent with what is really saved
+          if (err?.name === 'ConflictError' && attempt < 3) continue; // another tab won the race: redo on its data
           throw new Error(`Could not save (${err?.message ?? 'storage error'}). Export a backup from Settings.`);
-        } finally {
-          pendingBytes = null;
         }
-        if (persistent === null) persistent = await storage.persist();
       }
-      return result;
     });
   }
 
-  async function refreshFromStorage() {
-    const rec = await storage.read();
-    if (rec.version === version) return;
-    await loadFrom(rec);
-    externalListeners.forEach((fn) => fn());
+  function refreshFromStorage() {
+    return serial(async () => {
+      const rec = await storage.read();
+      if (rec.version === version) return false;
+      await loadFrom(rec);
+      return true;
+    }).then((changed) => { if (changed) externalListeners.forEach((fn) => fn()); }, () => {});
   }
 
   // ---- initial load (+ first-run seed, done under the lock so two new tabs can't both seed) ----
@@ -128,7 +158,8 @@ export async function createWebPd(SQL, notices) {
       st.setSettings({ seeded: true });
     }
   });
-  persistent = await storage.persist();
+  // Never awaited inside the lock: Firefox may show a permission prompt for this.
+  storage.persist().then((v) => { persistent = v; });
 
   storage.onRemoteChange(() => refreshFromStorage());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshFromStorage(); });

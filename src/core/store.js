@@ -100,7 +100,7 @@ export class PromptStore {
     return r ? rowToPrompt(r) : null;
   }
 
-  create({ title, body, tags = [], pinned = false }) {
+  create({ title, body, tags = [], pinned = false }, { save = true } = {}) {
     if (!String(body ?? '').trim()) throw new Error('Prompt body is empty');
     const t = now();
     const finalTitle = String(title ?? '').trim() || String(body).trim().split('\n')[0].slice(0, 60);
@@ -109,7 +109,7 @@ export class PromptStore {
       [finalTitle, body, JSON.stringify(cleanTags(tags)), pinned ? 1 : 0, t, t],
     );
     const id = this._all('SELECT last_insert_rowid() AS id')[0].id;
-    this.save();
+    if (save) this.save();
     return this.get(id);
   }
 
@@ -195,15 +195,29 @@ export class PromptStore {
     return { app: 'PromptDock', version: 1, exportedAt: now(), prompts: this.list().map(({ id, useCount, lastUsed, ...p }) => p), slotValues: this.slotValues() };
   }
 
+  /** All-or-nothing: one SQL transaction and a single save, however many prompts. */
   importJSON(data) {
     const existing = new Set(this.list().map((p) => `${p.title}\u0000${p.body}`));
     let added = 0;
-    for (const p of data?.prompts ?? []) {
-      if (!p?.body || existing.has(`${p.title}\u0000${p.body}`)) continue;
-      this.create(p);
-      added++;
+    this.db.exec('BEGIN');
+    try {
+      for (const p of data?.prompts ?? []) {
+        if (!p?.body || existing.has(`${p.title}\u0000${p.body}`)) continue;
+        const tags = Array.isArray(p.tags) ? p.tags.map(String) : p.tags; // tolerate numbers in hand-edited files
+        this.create({ ...p, body: String(p.body), title: p.title == null ? '' : String(p.title), tags }, { save: false });
+        existing.add(`${p.title}\u0000${p.body}`);
+        added++;
+      }
+      for (const [name, value] of Object.entries(data?.slotValues ?? {})) {
+        if (value === null || value === '') continue;
+        this._run('INSERT INTO slot_values (name, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at', [name, String(value), now()]);
+      }
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
     }
-    if (data?.slotValues) this.setSlotValues(data.slotValues);
+    this.save();
     return added;
   }
 }
